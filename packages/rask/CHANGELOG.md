@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Split: the launcher and the executable moved to package rask_cli; this package is the library a rask.dart imports (package:rask/rask.dart, package:rask/engine.dart, package:rask/testing.dart).
 - rask.dart at the workspace root is loaded: compiled once with dart compile
   exe (cached by content), then exec'd. Requires `rask` under the root
   `dependencies` or `dev_dependencies`. rask pub bypasses it.

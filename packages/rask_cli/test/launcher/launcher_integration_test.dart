@@ -4,17 +4,20 @@ library;
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:rask/src/launcher/launcher.dart';
-import 'package:rask/src/run/process_runner.dart';
+import 'package:rask/engine.dart';
+import 'package:rask_cli/rask_cli.dart';
 import 'package:test/test.dart';
 
 /// The only tests that really run `dart compile exe` (D-033). They share a
-/// throwaway workspace whose root depends on this very package by path and
+/// throwaway workspace whose root depends on the rask library by path and
 /// holds a rask.dart with a custom task, and drive [Launcher] with the real
 /// process runner.
 void main() {
   late Directory root;
-  final cliDir = Directory.current.path; // packages/cli
+  // cwd is packages/rask_cli; the temp workspace's rask.dart imports
+  // package:rask, the library, so it must depend on the sibling
+  // packages/rask, not this package.
+  final cliDir = p.normalize(p.join(Directory.current.path, '..', 'rask'));
 
   setUpAll(() async {
     root = Directory.systemTemp.createTempSync('rask_launcher_it_');

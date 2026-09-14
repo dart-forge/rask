@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:rask/engine.dart';
+import 'package:rask_cli/rask_cli.dart';
 
 Future<void> main(List<String> args) async {
   exit(

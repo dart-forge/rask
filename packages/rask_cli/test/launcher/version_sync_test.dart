@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:rask/src/launcher/launcher.dart';
+import 'package:rask_cli/src/launcher/launcher.dart';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 

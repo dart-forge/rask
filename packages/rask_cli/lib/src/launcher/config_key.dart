@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'package:rask/src/launcher/entrypoint_template.dart';
+import 'package:rask_cli/src/launcher/entrypoint_template.dart';
 
 /// The inputs a `dart compile --depfile` listed, sorted and unique: those
 /// under [root] as root-relative posix paths, those outside it — a `path:`
