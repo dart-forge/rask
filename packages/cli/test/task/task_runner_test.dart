@@ -142,6 +142,15 @@ void main() {
     expect(out, contains('kaboom'));
   });
 
+  test('an Error from run also gets its stack trace written after the failed line (F3)', () async {
+    final g = graph([Task('boom', run: (_) async => throw StateError('kaboom'))], 'boom', targets: [ws['lone']]);
+    final (code, _, out) = await run(g);
+    expect(code, 1);
+    expect(out, contains('kaboom'));
+    // the stack trace of the throw above, in this very file
+    expect(out, contains('task_runner_test.dart'));
+  });
+
   test('jobs > 1 captures output per package and prints it as a block', () async {
     final (code, runner, out) = await run(graph([], 'analyze', targets: [ws['lib'], ws['lone']]), jobs: 4);
     expect(code, 0);

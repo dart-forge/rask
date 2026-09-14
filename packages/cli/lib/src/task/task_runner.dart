@@ -75,8 +75,12 @@ Future<int> runTaskGraph(
         } on ProcessException catch (e) {
           sink.writeln('rask: ${node.package.name} — ${node.task.name} failed ($e)');
           code = exitCannotRun;
-        } catch (e) {
+        } catch (e, st) {
           sink.writeln('rask: ${node.package.name} — ${node.task.name} failed ($e)');
+          // Error (StateError, ArgumentError, ...) means a bug in the task's
+          // Dart code, not an expected failure: keep the stack trace so it
+          // can be found without reproducing the run.
+          if (e is Error) sink.writeln(st.toString());
           code = exitTaskError;
         }
         if (buffer != null) {
