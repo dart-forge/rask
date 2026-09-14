@@ -156,6 +156,10 @@ class TaskCache {
     return recorded['outputsHash'] == outputsHash(package, outputs);
   }
 
+  /// Forgets the memoized tree of [package]. Call after a task ran in it:
+  /// the run may have written files that later keys must see.
+  void invalidate(Package package) => _trees.remove(package.path);
+
   /// Records that [task] succeeded in [package] with the current [outputs].
   void storeTask(String key,
       {required Package package, required String task, required List<String> outputs}) {
