@@ -102,8 +102,9 @@ class _DartVerbCommand extends Command<int> {
       'jobs',
       abbr: 'j',
       valueHelp: 'N',
-      help: 'Run up to N independent packages at once. '
-          'Defaults to the number of CPU cores.',
+      help: 'Run up to N independent packages at once. Defaults to the number '
+          'of CPU cores. Note that `dart test` runs its own suites in parallel '
+          'too, so pin a smaller N on CI.',
     );
   }
 

@@ -33,6 +33,12 @@ a package that runs alone streams to the terminal. After a failure nothing
 new starts, running packages are awaited, and the first failure's exit code
 is returned.
 
+`-j` defaults to the number of CPU cores and multiplies with `dart test`'s own
+suite-level parallelism, so on CI pin a smaller value (`rask test -j 2`). Whether a
+package streams or is captured depends on how many packages in its stage are
+uncached, so the same package may print with colours in one run and plain in the
+next; the content is the same.
+
 Nested workspaces (a member with its own `workspace:` section) are flattened
 into the top-level root, exactly as pub resolves them.
 
