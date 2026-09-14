@@ -9,6 +9,7 @@ import 'package:rask/src/run/process_runner.dart';
 /// Exit codes are looked up by the working directory's basename.
 class RecordingRunner implements ProcessRunner {
   final calls = <(String, List<String>, String)>[];
+  final environments = <Map<String, String>?>[];
   final Map<String, int> exitCodes;
   final Set<String> cannotStart;
   RecordingRunner({this.exitCodes = const {}, this.cannotStart = const {}});
@@ -20,15 +21,18 @@ class RecordingRunner implements ProcessRunner {
   }
 
   @override
-  Future<int> run(String executable, List<String> args, {required String workingDirectory}) async {
+  Future<int> run(String executable, List<String> args,
+      {required String workingDirectory, Map<String, String>? environment}) async {
     calls.add((executable, args, workingDirectory));
+    environments.add(environment);
     return _code(workingDirectory);
   }
 
   @override
   Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async {
+      {required String workingDirectory, Map<String, String>? environment}) async {
     calls.add((executable, args, workingDirectory));
+    environments.add(environment);
     return CapturedProcess(_code(workingDirectory), 'out of ${p.basename(workingDirectory)}\n');
   }
 }
@@ -44,7 +48,8 @@ class GatedRunner implements ProcessRunner {
   Completer<int> gate(String pkg) => _gates.putIfAbsent(pkg, Completer<int>.new);
 
   @override
-  Future<int> run(String executable, List<String> args, {required String workingDirectory}) async {
+  Future<int> run(String executable, List<String> args,
+      {required String workingDirectory, Map<String, String>? environment}) async {
     final pkg = p.basename(workingDirectory);
     events.add('start $pkg');
     final code = await gate(pkg).future;
@@ -54,8 +59,8 @@ class GatedRunner implements ProcessRunner {
 
   @override
   Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async {
-    final code = await run(executable, args, workingDirectory: workingDirectory);
+      {required String workingDirectory, Map<String, String>? environment}) async {
+    final code = await run(executable, args, workingDirectory: workingDirectory, environment: environment);
     return CapturedProcess(code, 'output of ${p.basename(workingDirectory)}\n');
   }
 }
@@ -67,7 +72,8 @@ class ThrowingRunner implements ProcessRunner {
   ThrowingRunner({required this.throwFor});
 
   @override
-  Future<int> run(String executable, List<String> args, {required String workingDirectory}) async {
+  Future<int> run(String executable, List<String> args,
+      {required String workingDirectory, Map<String, String>? environment}) async {
     final pkg = p.basename(workingDirectory);
     started.add(pkg);
     if (pkg == throwFor) throw ProcessException(executable, args, 'dart not found', 2);
@@ -76,8 +82,8 @@ class ThrowingRunner implements ProcessRunner {
 
   @override
   Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async =>
-      CapturedProcess(await run(executable, args, workingDirectory: workingDirectory), '');
+      {required String workingDirectory, Map<String, String>? environment}) async =>
+      CapturedProcess(await run(executable, args, workingDirectory: workingDirectory, environment: environment), '');
 }
 
 /// A registry that has nothing published.

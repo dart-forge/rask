@@ -17,13 +17,15 @@ class CapturedProcess {
 abstract class ProcessRunner {
   /// Runs the process with inherited stdio — its output goes straight to the
   /// terminal — and returns its exit code.
+  /// [environment] is added to the parent's environment when given.
   Future<int> run(String executable, List<String> args,
-      {required String workingDirectory});
+      {required String workingDirectory, Map<String, String>? environment});
 
   /// Runs the process with stdout and stderr captured instead of inherited,
   /// so several processes can run at once without interleaving their output.
+  /// [environment] is added to the parent's environment when given.
   Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory});
+      {required String workingDirectory, Map<String, String>? environment});
 }
 
 /// Runs real processes.
@@ -32,11 +34,12 @@ class SystemProcessRunner implements ProcessRunner {
 
   @override
   Future<int> run(String executable, List<String> args,
-      {required String workingDirectory}) async {
+      {required String workingDirectory, Map<String, String>? environment}) async {
     final process = await Process.start(
       executable,
       args,
       workingDirectory: workingDirectory,
+      environment: environment,
       mode: ProcessStartMode.inheritStdio,
     );
     return process.exitCode;
@@ -44,11 +47,12 @@ class SystemProcessRunner implements ProcessRunner {
 
   @override
   Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async {
+      {required String workingDirectory, Map<String, String>? environment}) async {
     final process = await Process.start(
       executable,
       args,
       workingDirectory: workingDirectory,
+      environment: environment,
     );
     final output = StringBuffer();
     const decoder = Utf8Decoder(allowMalformed: true);

@@ -25,4 +25,17 @@ void main() {
     expect(result.output, contains('to stdout'));
     expect(result.output, contains('to stderr'));
   });
+
+  test('run passes environment through to the child', () async {
+    final dir = Directory.systemTemp.createTempSync('rask_env_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final script = File(p.join(dir.path, 'env.dart'))
+      ..writeAsStringSync("import 'dart:io';\nvoid main() => exit(Platform.environment['RASK_PROBE'] == 'yes' ? 0 : 3);\n");
+    const runner = SystemProcessRunner();
+    expect(
+      await runner.run('dart', [script.path], workingDirectory: dir.path, environment: {'RASK_PROBE': 'yes'}),
+      0,
+    );
+    expect(await runner.run('dart', [script.path], workingDirectory: dir.path), 3);
+  });
 }
