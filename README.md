@@ -8,7 +8,7 @@ in parallel where packages are independent, skipping whatever has not changed, w
 add your own tasks in Dart, not YAML.
 
 ```sh
-dart install rask_cli          # once published; from a checkout see below
+dart install rask_cli
 
 rask test                      # dart test in every package that has tests
 rask analyze                   # dart analyze in every package
@@ -62,21 +62,19 @@ cached by the content of every file it depends on.
 | [`rask_cli`](packages/rask_cli) | The `rask` command. `dart install rask_cli`. |
 | [`rask`](packages/rask) | The library a `rask.dart` imports (`package:rask/rask.dart`); the engine behind the command (`package:rask/engine.dart`); test doubles (`package:rask/testing.dart`). |
 
-Until both are on pub.dev, install the command from a checkout:
+To develop rask itself, run the command from a checkout instead — `dart install` cannot resolve an
+unreleased `rask` library, but activating the package from inside the workspace can:
 
 ```sh
 git clone https://github.com/dart-forge/rask
 dart pub global activate -s path rask/packages/rask_cli      # puts `rask` in ~/.pub-cache/bin
 ```
 
-and depend on the library by git:
+Depend on the library from a `rask.dart` with
 
 ```yaml
 dev_dependencies:
-  rask:
-    git:
-      url: https://github.com/dart-forge/rask
-      path: packages/rask
+  rask: ^0.1.0
 ```
 
 ## Why not melos, or a shell script
@@ -93,6 +91,6 @@ collection of plain packages; anything framework-specific belongs in a `rask.dar
 
 Early. Working today: `test`, `analyze`, `pub`, `bump`, `publish`, `--filter`, `--jobs`, the content-addressed
 cache with output verification, and `rask.dart` with custom tasks. Not yet: a code-generation API that keeps
-generated code out of `lib/`, `dev`/`build` verbs with framework plugins, and pub.dev releases.
+generated code out of `lib/`, and `dev`/`build` verbs with framework plugins.
 
 Requires Dart 3.13 or later.

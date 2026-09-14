@@ -1,3 +1,3 @@
-## Unreleased
+## 0.1.0
 
-- Initial split from package rask: the rask executable (launcher).
+First release. The `rask` command: runs the built-in tasks and, when the workspace root has a `rask.dart`, compiles it once (`dart compile exe`, cached by content) and runs its tasks.
