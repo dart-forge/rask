@@ -50,6 +50,28 @@ void main() {
     test('returns an empty list for an empty depfile', () {
       expect(localDepfileInputs('', root: root.path), isEmpty);
     });
+
+    test('unescapes backslash-space in paths', () {
+      final r = root.path;
+      final depfile = '$r/out.exe: $r/with\\ space/rask.dart $r/rask.dart\n';
+      expect(localDepfileInputs(depfile, root: r), ['rask.dart', 'with space/rask.dart']);
+    });
+
+    test('a root path containing a space', () {
+      final spaceRoot = Directory.systemTemp.createTempSync('rask key ');
+      addTearDown(() => spaceRoot.deleteSync(recursive: true));
+      final rr = spaceRoot.path;
+      File(p.join(rr, 'rask.dart')).writeAsStringSync('const x = 1;');
+      final escapedRoot = rr.replaceAll(' ', '\\ ');
+      final depfile = '$escapedRoot/out.exe: $escapedRoot/rask.dart\n';
+      expect(localDepfileInputs(depfile, root: rr), ['rask.dart']);
+    });
+
+    test('unescapes backslash-hash and double backslash', () {
+      final r = root.path;
+      final depfile = 'out: $r/a\\#b.dart $r/c\\\\d.dart\n';
+      expect(localDepfileInputs(depfile, root: r), ['a#b.dart', 'c\\d.dart']);
+    });
   });
 
   group('computeConfigKey', () {
