@@ -3,9 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cli/rask_command_runner.dart';
 import 'package:rask/src/task/task.dart';
+import 'package:rask/testing.dart';
 import 'package:test/test.dart';
-
-import '../helpers/recording_runner.dart';
 
 void main() {
   late Directory root;

@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:rask/src/launcher/config_key.dart';
-import 'package:rask/src/launcher/entrypoint_template.dart';
-import 'package:rask/src/launcher/launcher.dart';
+import 'package:rask_cli/src/launcher/config_key.dart';
+import 'package:rask_cli/src/launcher/entrypoint_template.dart';
+import 'package:rask_cli/src/launcher/launcher.dart';
 import 'package:test/test.dart';
 
-import '../helpers/recording_runner.dart';
+import '../helpers/fake_compiler.dart';
 
 void main() {
   late Directory root;

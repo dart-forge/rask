@@ -6,9 +6,8 @@ import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/task/task_runner.dart';
 import 'package:rask/src/workspace/workspace.dart';
+import 'package:rask/testing.dart';
 import 'package:test/test.dart';
-
-import '../helpers/recording_runner.dart';
 
 void main() {
   late Directory root;

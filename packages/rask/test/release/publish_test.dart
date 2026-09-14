@@ -3,9 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/release/publish.dart';
 import 'package:rask/src/workspace/workspace.dart';
+import 'package:rask/testing.dart';
 import 'package:test/test.dart';
-
-import '../helpers/recording_runner.dart';
 
 class FakeRegistry implements PackageRegistry {
   /// host -> package -> published versions
