@@ -138,6 +138,12 @@ void main() {
       final r = FakeCompiler(root: root.path, exitCodes: {'entrypoint.exe': 5});
       expect(await launcher(r: r).run(['test']), 5);
     });
+
+    test('empty args with a rask.dart still compiles and execs', () async {
+      expect(await launcher().run([]), 0);
+      expect(runner.compiles, 1);
+      expect(runner.calls.last.$2, <String>[]);
+    });
   });
 
   group('compile cache', () {
@@ -168,6 +174,14 @@ void main() {
     test('recompiles when the exe is missing', () async {
       await launcher().run(['test']);
       File(exe()).deleteSync();
+      final r2 = FakeCompiler(root: root.path);
+      await launcher(r: r2).run(['test']);
+      expect(r2.compiles, 1);
+    });
+
+    test('recompiles when the depfile is missing but the key file and exe exist', () async {
+      await launcher().run(['test']);
+      File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.d')).deleteSync();
       final r2 = FakeCompiler(root: root.path);
       await launcher(r: r2).run(['test']);
       expect(r2.compiles, 1);
@@ -207,6 +221,14 @@ void main() {
       final r = FakeCompiler(root: root.path, compileExitCode: 1);
       await launcher(r: r).run(['test']);
       expect(keyFile().existsSync(), isFalse);
+    });
+  });
+
+  group('exec failure', () {
+    test('an exe that cannot be started is reported and exits 70', () async {
+      final r = FakeCompiler(root: root.path, failExec: true);
+      expect(await launcher(r: r).run(['test']), 70);
+      expect(err.toString(), allOf(contains('entrypoint.exe'), contains('Exec format error')));
     });
   });
 }

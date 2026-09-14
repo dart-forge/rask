@@ -100,11 +100,16 @@ class FakeCompiler extends RecordingRunner {
   final String root;
   final int compileExitCode;
   final String compileOutput;
+
+  /// When true, [run] (the exec step) throws instead of returning, as if
+  /// the compiled exe could not be started.
+  final bool failExec;
   int compiles = 0;
   FakeCompiler({
     required this.root,
     this.compileExitCode = 0,
     this.compileOutput = '',
+    this.failExec = false,
     super.exitCodes,
   });
 
@@ -134,6 +139,7 @@ class FakeCompiler extends RecordingRunner {
   @override
   Future<int> run(String executable, List<String> args,
       {required String workingDirectory, Map<String, String>? environment}) async {
+    if (failExec) throw ProcessException('entrypoint.exe', const [], 'Exec format error', 8);
     calls.add((executable, args, workingDirectory));
     environments.add(environment);
     return exitCodes[p.basename(executable)] ?? exitCodes[p.basename(workingDirectory)] ?? 0;

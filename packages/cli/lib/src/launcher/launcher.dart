@@ -7,6 +7,7 @@ import 'package:rask/src/launcher/config_key.dart';
 import 'package:rask/src/launcher/entrypoint_template.dart';
 import 'package:rask/src/run/process_runner.dart';
 import 'package:rask/src/task/task.dart';
+import 'package:rask/src/task/task_runner.dart' show exitCannotRun;
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:yaml/yaml.dart';
 
@@ -79,11 +80,17 @@ class Launcher {
     String? key = _currentKey(root, depfile, keyFile, exe);
     if (key == null) {
       err.writeln('rask: compiling rask.dart …');
-      final result = await runner.runCaptured(
-        dartExecutable,
-        ['compile', 'exe', entrypoint.path, '-o', exe.path, '--depfile', depfile.path],
-        workingDirectory: root.path,
-      );
+      final CapturedProcess result;
+      try {
+        result = await runner.runCaptured(
+          dartExecutable,
+          ['compile', 'exe', entrypoint.path, '-o', exe.path, '--depfile', depfile.path],
+          workingDirectory: root.path,
+        );
+      } on ProcessException catch (e) {
+        err.writeln('rask: could not run ${e.executable}: ${e.message}');
+        return exitCannotRun;
+      }
       if (result.exitCode != 0) {
         // The two shapes the front end reports a missing `config` with:
         // `Undefined name 'config'.` and `Getter not found: 'config'.`
@@ -94,31 +101,36 @@ class Launcher {
         if (result.output.isNotEmpty && !result.output.endsWith('\n')) err.writeln();
         return exitUsage;
       }
-      key = computeConfigKey(
-        root: root,
-        localInputs: localDepfileInputs(depfile.readAsStringSync(), root: root.path),
-        sdkVersion: sdkVersion,
-      );
+      key = _keyFrom(root, depfile);
       keyFile.writeAsStringSync(key);
     }
 
-    return runner.run(exe.path, args, workingDirectory: cwd.path, environment: {
-      ...environment,
-      'RASK_CONFIG_KEY': key,
-      'RASK_LAUNCHER_VERSION': launcherVersion,
-    });
+    try {
+      return await runner.run(exe.path, args, workingDirectory: cwd.path, environment: {
+        ...environment,
+        'RASK_CONFIG_KEY': key,
+        'RASK_LAUNCHER_VERSION': launcherVersion,
+      });
+    } on ProcessException catch (e) {
+      err.writeln('rask: could not run ${e.executable}: ${e.message}');
+      return exitCannotRun;
+    }
   }
 
   /// The recorded key when the compiled exe is still valid, else null.
   String? _currentKey(Directory root, File depfile, File keyFile, File exe) {
     if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync()) return null;
-    final key = computeConfigKey(
-      root: root,
-      localInputs: localDepfileInputs(depfile.readAsStringSync(), root: root.path),
-      sdkVersion: sdkVersion,
-    );
+    final key = _keyFrom(root, depfile);
     return keyFile.readAsStringSync() == key ? key : null;
   }
+
+  /// The config key from the depfile's inputs plus [sdkVersion] — computed
+  /// after a fresh compile and again to check whether a cached exe is stale.
+  String _keyFrom(Directory root, File depfile) => computeConfigKey(
+        root: root,
+        localInputs: localDepfileInputs(depfile.readAsStringSync(), root: root.path),
+        sdkVersion: sdkVersion,
+      );
 
   static bool _dependsOnRask(File pubspec) {
     if (!pubspec.existsSync()) return false;
