@@ -1,0 +1,98 @@
+# rask
+
+**The verbs Dart is missing.**
+
+`dart` knows how to test, analyze, compile and publish *one package*. It has no idea what to do with a
+workspace of twenty. rask runs those verbs across a whole [pub workspace](https://dart.dev/tools/pub/workspaces) —
+in parallel where packages are independent, skipping whatever has not changed, with filters — and lets you
+add your own tasks in Dart, not YAML.
+
+```sh
+dart install rask_cli          # once published; from a checkout see below
+
+rask test                      # dart test in every package that has tests
+rask analyze                   # dart analyze in every package
+rask test -F my_pkg...         # my_pkg and everything that depends on it
+rask publish --dry-run         # dart pub publish, dependencies first, already-published versions skipped
+rask bump 0.3.0                # lockstep version bump: pubspecs, member constraints, CHANGELOG "Unreleased"
+```
+
+The second `rask test` on an unchanged tree takes well under a second: every task's inputs are hashed, and a
+package whose inputs — its own files, the files of the workspace members it depends on, `pubspec.lock`, the
+SDK — have not changed is skipped. Nothing is derived from git state or timestamps. A wrong skip is worse
+than a slow run, so when in doubt rask re-runs.
+
+## Tasks in Dart
+
+A `rask.dart` at the workspace root adds tasks or changes the built-in ones. It is ordinary Dart: the analyzer
+checks it, and there is nothing to learn beyond one function.
+
+```dart
+// rask.dart
+import 'package:rask/rask.dart';
+
+final config = defineConfig(tasks: [
+  Task(
+    'codegen',
+    where: (pkg) => pkg.dependsOn('build_runner'),
+    run: (ctx) => ctx.dart(['run', 'build_runner', 'build', '--delete-conflicting-outputs']),
+    outputs: ['lib/**.g.dart'],
+  ),
+  Task('test', dependsOn: ['^codegen']),          // built-in test now waits for codegen in dependencies
+  Task(
+    'format',
+    run: (ctx) => ctx.dart(['format', '--set-exit-if-changed', '--output=none', '.']),
+  ),
+]);
+```
+
+Add `rask` under the root `dev_dependencies`, run `rask pub get`, and `rask codegen` / `rask format` exist.
+Each task runs once per package it applies to (`where`), in dependency order (`dependsOn`: `'x'` for the same
+package's `x`, `'^x'` for `x` in the packages this one depends on), and is cached like the built-ins — with the
+declared `outputs` verified on every cache hit, so a deleted build directory means a re-run, never a stale skip.
+
+The first run after editing `rask.dart` compiles it with `dart compile exe` (a few seconds,
+`rask: compiling rask.dart …` on stderr). Every later run starts in milliseconds; the compiled program is
+cached by the content of every file it depends on.
+
+## Packages
+
+| Package | What it is |
+|---|---|
+| [`rask_cli`](packages/rask_cli) | The `rask` command. `dart install rask_cli`. |
+| [`rask`](packages/rask) | The library a `rask.dart` imports (`package:rask/rask.dart`); the engine behind the command (`package:rask/engine.dart`); test doubles (`package:rask/testing.dart`). |
+
+Until both are on pub.dev, install the command from a checkout:
+
+```sh
+git clone https://github.com/dart-forge/rask
+dart pub global activate -s path rask/packages/rask_cli      # puts `rask` in ~/.pub-cache/bin
+```
+
+and depend on the library by git:
+
+```yaml
+dev_dependencies:
+  rask:
+    git:
+      url: https://github.com/dart-forge/rask
+      path: packages/rask
+```
+
+## Why not melos, or a shell script
+
+melos was built before pub workspaces existed and had to wire packages together itself. Now that `pub`
+resolves a workspace natively, what is left to do is the part `pub` does not: run things across it in the
+right order, only when needed. rask does only that part, and it does it the way turborepo does for JS —
+content-hashed inputs, staged parallelism, filters — without inheriting any of the JS-specific problems.
+
+rask has no framework-specific knowledge. It works the same for a server framework, a Flutter app and a
+collection of plain packages; anything framework-specific belongs in a `rask.dart` or, later, in a plugin.
+
+## Status
+
+Early. Working today: `test`, `analyze`, `pub`, `bump`, `publish`, `--filter`, `--jobs`, the content-addressed
+cache with output verification, and `rask.dart` with custom tasks. Not yet: a code-generation API that keeps
+generated code out of `lib/`, `dev`/`build` verbs with framework plugins, and pub.dev releases.
+
+Requires Dart 3.13 or later.

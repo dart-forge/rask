@@ -246,7 +246,7 @@ void main() {
     // (Task 3's resolveConfig), whose `where` is `hasTests` unless the user
     // task overrides it. Give a package a real test file so that merged
     // `where` holds for it, as the tests below that reuse the name 'test'
-    // (to mirror the real built-in, per D-037's rationale) require.
+    // (to mirror the real built-in) require.
     void addTestFile(String rel) {
       final dir = Directory(p.join(root.path, rel, 'test'))
         ..createSync(recursive: true);
@@ -286,32 +286,29 @@ void main() {
       },
     );
 
-    test(
-      '^task depends on the task in transitive workspace dependencies (D-037)',
-      () {
-        addTestFile('packages/app');
-        final g = buildTaskGraph(
-          config: config([
-            Task(
-              'codegen',
-              run: noop,
-              where: (pkg) => pkg.dependsOn('build_runner'),
-            ),
-            Task('test', dependsOn: ['^codegen']),
-          ]),
-          task: 'test',
-          targets: [ws['app']],
-          workspace: ws,
-        );
-        final testApp = g.nodes.singleWhere((n) => n.id == 'test@app');
-        // lib_b has no codegen (where false) -> no node, no edge; core is transitive
-        expect(
-          ids(g.dependenciesOf(testApp)),
-          unorderedEquals(['codegen@lib_a', 'codegen@core']),
-        );
-        expect(ids(g.nodes), isNot(contains('codegen@lib_b')));
-      },
-    );
+    test('^task depends on the task in transitive workspace dependencies', () {
+      addTestFile('packages/app');
+      final g = buildTaskGraph(
+        config: config([
+          Task(
+            'codegen',
+            run: noop,
+            where: (pkg) => pkg.dependsOn('build_runner'),
+          ),
+          Task('test', dependsOn: ['^codegen']),
+        ]),
+        task: 'test',
+        targets: [ws['app']],
+        workspace: ws,
+      );
+      final testApp = g.nodes.singleWhere((n) => n.id == 'test@app');
+      // lib_b has no codegen (where false) -> no node, no edge; core is transitive
+      expect(
+        ids(g.dependenciesOf(testApp)),
+        unorderedEquals(['codegen@lib_a', 'codegen@core']),
+      );
+      expect(ids(g.nodes), isNot(contains('codegen@lib_b')));
+    });
 
     test('nodes are in dependency order and stages respect edges', () {
       addTestFile('packages/app');

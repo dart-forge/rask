@@ -143,7 +143,7 @@ class TaskGraph {
 ///
 /// Nodes come from [targets] filtered by the task's `where`, then from
 /// `dependsOn`: `'x'` adds `x` in the same package, `'^x'` adds `x` in every
-/// **transitive** workspace dependency (D-037). Packages where the depended-on
+/// **transitive** workspace dependency. Packages where the depended-on
 /// task does not apply contribute no node and no edge. Nodes pulled in this
 /// way are expanded the same way, whether or not they are in [targets].
 /// Throws [CyclicDependencyException] on a cycle.

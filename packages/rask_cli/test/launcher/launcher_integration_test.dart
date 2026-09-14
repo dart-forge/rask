@@ -8,7 +8,7 @@ import 'package:rask/engine.dart';
 import 'package:rask_cli/rask_cli.dart';
 import 'package:test/test.dart';
 
-/// The only tests that really run `dart compile exe` (D-033). They share a
+/// The only tests that really run `dart compile exe`. They share a
 /// throwaway workspace whose root depends on the rask library by path and
 /// holds a rask.dart with a custom task, and drive [Launcher] with the real
 /// process runner.

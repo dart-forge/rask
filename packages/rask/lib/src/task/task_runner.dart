@@ -9,7 +9,7 @@ import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/workspace/workspace.dart';
 
 /// Exit code when a task's process could not be started at all (`dart`
-/// missing from PATH, ...): `EX_SOFTWARE` (D-035).
+/// missing from PATH, ...): `EX_SOFTWARE`.
 const exitCannotRun = 70;
 
 /// Exit code for a task that threw something other than [ProcessFailure].
@@ -21,7 +21,7 @@ const exitTaskError = 1;
 /// and every successful node is recorded. After the first failure no new
 /// node starts, running nodes are awaited, and that failure's exit code is
 /// returned: the process's code for [ProcessFailure], 70 when a process
-/// could not start, 1 for any other exception (D-039).
+/// could not start, 1 for any other exception.
 ///
 /// [graph] with no nodes at all (no target package the task applies to)
 /// writes `rask: nothing to do for <taskName>` when [taskName] is given —

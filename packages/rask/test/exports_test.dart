@@ -1,4 +1,4 @@
-// Compile-time check of the two public libraries (D-043): if a name moves
+// Compile-time check of the two public libraries: if a name moves
 // out of `rask.dart`, or `engine.dart` stops re-exporting it, this file
 // fails to compile.
 import 'package:rask/engine.dart' as engine;

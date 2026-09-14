@@ -11,7 +11,7 @@ import 'package:yaml/yaml.dart';
 /// `test/launcher/version_sync_test.dart` fails when it drifts.
 const String raskVersion = '0.0.1';
 
-/// What `dart install`ed rask does before any task runs (D-025, D-048–D-051):
+/// What `dart install`ed rask does before any task runs:
 /// find the workspace root; if it has a `rask.dart`, compile
 /// `.dart_tool/rask/entrypoint.dart` (which imports it) to a standalone
 /// executable — cached by a content hash of everything the compiler read —
@@ -52,7 +52,9 @@ class Launcher {
     if (root == null) return builtin(args);
     final raskDart = File(p.join(root.path, 'rask.dart'));
     if (!raskDart.existsSync()) return builtin(args);
-    if (args.isNotEmpty && args.first == 'pub') return builtin(args); // D-050
+    // pub must not need a compiled rask.dart: it is what makes rask.dart
+    // compilable in the first place.
+    if (args.isNotEmpty && args.first == 'pub') return builtin(args);
 
     if (!File(p.join(root.path, '.dart_tool', 'package_config.json'))
         .existsSync()) {
@@ -172,7 +174,7 @@ class Launcher {
     // The entrypoint imports rask.dart, so every depfile lists it. Its
     // absence means this is not the depfile we think it is (unparsable,
     // half-written): a miss costs one compile, a wrong hit runs stale
-    // tasks (V).
+    // tasks.
     if (!inputs.contains('rask.dart')) return null;
     final key = _keyFrom(root, inputs);
     return keyFile.readAsStringSync() == key ? key : null;
@@ -201,7 +203,7 @@ class Launcher {
   /// Trees whose files stay out of the config key: the pub cache, which
   /// `pubspec.lock` covers and which would cost thousands of reads to hash.
   /// Everything else the depfile lists is hashed, including `path:`
-  /// dependencies outside the workspace (D-051 amendment). The SDK needs no
+  /// dependencies outside the workspace. The SDK needs no
   /// entry: `Platform.resolvedExecutable` does not locate it from inside an
   /// AOT launcher, and a real `dart compile exe` depfile lists no SDK source.
   List<String> _excludedRoots() {

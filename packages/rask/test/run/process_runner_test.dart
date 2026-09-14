@@ -5,7 +5,7 @@ import 'package:rask/src/run/process_runner.dart';
 import 'package:test/test.dart';
 
 void main() {
-  // The tests that spawn a process (see plan Global Constraints / D-011):
+  // The tests that spawn a process:
   // they run a tiny script with the Dart VM that is already running them.
   test('SystemProcessRunner.runCaptured returns the exit code with stdout and stderr captured', () async {
     final dir = Directory.systemTemp.createTempSync('rask_proc_');
