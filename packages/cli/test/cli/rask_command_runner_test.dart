@@ -104,6 +104,31 @@ void main() {
     expect(out.toString(), contains('nope'));
   });
 
+  group('--jobs', () {
+    test('two independent packages run captured when -j allows it', () async {
+      Directory(p.join(root.path, 'packages', 'tmp5')).createSync(recursive: true);
+      File(p.join(root.path, 'packages', 'tmp5', 'pubspec.yaml')).writeAsStringSync('name: tmp5\n');
+      expect(await rask(['analyze', '-j', '2', '-F', 'tmp4', '-F', 'tmp5']), 0);
+      expect(dirs(), unorderedEquals(['tmp4', 'tmp5']));
+      expect(runner.captured.map(p.basename), unorderedEquals(['tmp4', 'tmp5']));
+    });
+
+    test('--jobs 1 streams every package', () async {
+      Directory(p.join(root.path, 'packages', 'tmp5')).createSync(recursive: true);
+      File(p.join(root.path, 'packages', 'tmp5', 'pubspec.yaml')).writeAsStringSync('name: tmp5\n');
+      expect(await rask(['analyze', '--jobs', '1', '-F', 'tmp4', '-F', 'tmp5']), 0);
+      expect(dirs(), unorderedEquals(['tmp4', 'tmp5']));
+      expect(runner.captured, isEmpty);
+    });
+
+    test('a non-positive or non-numeric value fails with exit 64', () async {
+      expect(await rask(['analyze', '-j', '0']), 64);
+      expect(out.toString(), contains('--jobs'));
+      expect(await rask(['analyze', '-j', 'many']), 64);
+      expect(runner.calls, isEmpty);
+    });
+  });
+
   group('caching', () {
     test('by default a second identical run is skipped', () async {
       await rask(['analyze', '-F', 'tmp4']);

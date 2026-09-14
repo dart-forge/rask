@@ -98,10 +98,18 @@ class _DartVerbCommand extends Command<int> {
       help: 'Skip packages whose inputs have not changed since their last '
           'successful run. --no-cache runs everything and records nothing.',
     );
+    argParser.addOption(
+      'jobs',
+      abbr: 'j',
+      valueHelp: 'N',
+      help: 'Run up to N independent packages at once. '
+          'Defaults to the number of CPU cores.',
+    );
   }
 
   @override
-  String get invocation => 'rask $name [-F <package>] [--no-cache] [-- <dart $name args>]';
+  String get invocation =>
+      'rask $name [-F <package>] [-j <N>] [--no-cache] [-- <dart $name args>]';
 
   @override
   Future<int> run() async {
@@ -113,6 +121,11 @@ class _DartVerbCommand extends Command<int> {
             directory: Directory(p.join(ws.root.path, '.dart_tool', 'rask', 'cache')),
           )
         : null;
+    final jobsArg = argResults!.option('jobs');
+    final jobs = jobsArg == null ? Platform.numberOfProcessors : int.tryParse(jobsArg);
+    if (jobs == null || jobs < 1) {
+      throw _RaskError('--jobs must be a positive integer, got "$jobsArg"');
+    }
     return runDartVerb(
       name,
       packages: packages,
@@ -120,6 +133,7 @@ class _DartVerbCommand extends Command<int> {
       out: rask.out,
       extraArgs: argResults!.rest,
       cache: cache,
+      jobs: jobs,
     );
   }
 }
