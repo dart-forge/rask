@@ -8,12 +8,12 @@ and run `rask test`, `rask analyze`, `rask pub get`, `rask bump`, `rask publish`
 at your workspace root defines. The library that `rask.dart` imports is `package:rask` — add it under the
 root `dev_dependencies`.
 
-From a checkout of this repository (before the packages are on pub.dev), install the command with
+To run the command from a checkout of this repository (when developing rask itself), activate it from inside the workspace:
 
     dart pub global activate -s path packages/rask_cli
 
-which puts `rask` in `~/.pub-cache/bin`. `dart install rask_cli@{path: …}` does not work here: it resolves
-`rask_cli` outside the workspace and cannot find the unpublished `rask` library.
+which puts `rask` in `~/.pub-cache/bin`. (`dart install rask_cli@{path: …}` resolves `rask_cli` outside the
+workspace, so it only works once the `rask` version it depends on is on pub.dev.)
 
 When a `rask.dart` exists, the first run compiles it (`rask: compiling rask.dart …`, a few seconds);
 later runs start in milliseconds. See the `rask` package README for tasks, caching and releasing.

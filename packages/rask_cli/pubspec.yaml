@@ -1,6 +1,6 @@
 name: rask_cli
 description: The rask command. Installs the `rask` executable; the library a rask.dart imports is package:rask.
-version: 0.0.1
+version: 0.1.0
 repository: https://github.com/dart-forge/rask
 resolution: workspace
 environment:
@@ -12,7 +12,7 @@ executables:
 dependencies:
   crypto: ^3.0.6
   path: ^1.9.1
-  rask: any
+  rask: ^0.1.0
   yaml: ^3.1.4
 
 dev_dependencies:

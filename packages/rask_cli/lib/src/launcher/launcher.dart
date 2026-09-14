@@ -9,7 +9,7 @@ import 'package:yaml/yaml.dart';
 /// The version this launcher was built from. Keep equal to pubspec.yaml's
 /// `version:`; kept in sync by hand, and
 /// `test/launcher/version_sync_test.dart` fails when it drifts.
-const String raskVersion = '0.0.1';
+const String raskVersion = '0.1.0';
 
 /// What `dart install`ed rask does before any task runs:
 /// find the workspace root; if it has a `rask.dart`, compile
