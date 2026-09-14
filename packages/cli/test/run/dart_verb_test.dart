@@ -60,6 +60,27 @@ class GatedRunner implements ProcessRunner {
   }
 }
 
+/// A runner whose process for [throwFor] cannot even be started.
+class ThrowingRunner implements ProcessRunner {
+  final String throwFor;
+  final started = <String>[];
+  ThrowingRunner({required this.throwFor});
+
+  @override
+  Future<int> run(String executable, List<String> args,
+      {required String workingDirectory}) async {
+    final pkg = p.basename(workingDirectory);
+    started.add(pkg);
+    if (pkg == throwFor) throw ProcessException(executable, args, 'dart not found', 2);
+    return 0;
+  }
+
+  @override
+  Future<CapturedProcess> runCaptured(String executable, List<String> args,
+      {required String workingDirectory}) async =>
+      CapturedProcess(await run(executable, args, workingDirectory: workingDirectory), '');
+}
+
 void main() {
   late Directory root;
   late Workspace ws;
@@ -295,6 +316,17 @@ void main() {
       expect(await done, 1);
       expect(cache.contains(cache.keyFor(ws['tmp4'], 'analyze', const [])), isTrue);
       expect(cache.contains(cache.keyFor(ws['tmp3'], 'analyze', const [])), isFalse);
+    });
+
+    test('a runner that throws counts as a failure with exit 70 and stops new work', () async {
+      final runner = ThrowingRunner(throwFor: 'tmp2');
+      final out = StringBuffer();
+      final code = await runDartVerb('analyze', packages: ws.inOrder, workspace: ws,
+          runner: runner, out: out, jobs: 1);
+      expect(code, 70);
+      expect(runner.started, ['tmp2']); // jobs: 1 and tmp2 is first in stage 0
+      expect(out.toString(), contains('tmp2 — dart analyze failed ('));
+      expect(out.toString(), contains('dart not found'));
     });
 
     test('jobs below 1 is rejected', () {

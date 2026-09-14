@@ -8,6 +8,10 @@ import 'package:rask/src/run/process_runner.dart';
 import 'package:rask/src/workspace/stages.dart';
 import 'package:rask/src/workspace/workspace.dart';
 
+/// Exit code reported when a package's process could not be run at all
+/// (for example `dart` missing from PATH): `EX_SOFTWARE` from sysexits.
+const exitCannotRun = 70;
+
 /// Runs `dart <verb> <extraArgs>` inside each of [packages], dependencies
 /// first, stopping at the first non-zero exit code and returning it.
 ///
@@ -62,17 +66,26 @@ Future<int> runDartVerb(
     Future<void> worker() async {
       while (queue.isNotEmpty && failure == null) {
         final (pkg, key) = queue.removeFirst();
-        final int code;
-        if (stream) {
-          out.writeln('rask: ${pkg.name} — $command');
-          code = await runner.run('dart', [verb, ...extraArgs], workingDirectory: pkg.path);
-        } else {
-          final result = await runner.runCaptured('dart', [verb, ...extraArgs],
-              workingDirectory: pkg.path);
-          out.writeln('rask: ${pkg.name} — $command');
-          out.write(result.output);
-          if (result.output.isNotEmpty && !result.output.endsWith('\n')) out.writeln();
-          code = result.exitCode;
+        int code;
+        try {
+          if (stream) {
+            out.writeln('rask: ${pkg.name} — $command');
+            code = await runner.run('dart', [verb, ...extraArgs], workingDirectory: pkg.path);
+          } else {
+            final result = await runner.runCaptured('dart', [verb, ...extraArgs],
+                workingDirectory: pkg.path);
+            out.writeln('rask: ${pkg.name} — $command');
+            out.write(result.output);
+            if (result.output.isNotEmpty && !result.output.endsWith('\n')) out.writeln();
+            code = result.exitCode;
+          }
+        } on Exception catch (e) {
+          // The process could not be run (dart missing, fd exhaustion, ...).
+          // Treat it like any other failure so nothing new starts and the
+          // run ends with a clear line instead of a stack trace.
+          out.writeln('rask: ${pkg.name} — $command failed ($e)');
+          failure ??= exitCannotRun;
+          continue;
         }
         if (code != 0) {
           out.writeln('rask: ${pkg.name} — $command failed (exit $code)');
