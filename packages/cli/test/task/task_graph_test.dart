@@ -216,14 +216,7 @@ void main() {
     });
 
     test('a task with no dependsOn yields one stage', () {
-      // NOT the builtin `analyze` (F6 gives it dependsOn: ['^analyze']); a
-      // task with no dependsOn of its own must still yield a single stage.
-      final g = buildTaskGraph(
-        config: config([Task('noop', run: noop)]),
-        task: 'noop',
-        targets: ws.inOrder,
-        workspace: ws,
-      );
+      final g = buildTaskGraph(config: config([]), task: 'analyze', targets: ws.inOrder, workspace: ws);
       expect(g.stages, hasLength(1));
       expect(g.stages.single, hasLength(5));
     });

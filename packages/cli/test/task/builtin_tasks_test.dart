@@ -58,11 +58,6 @@ void main() {
     expect(builtinTasks.every((t) => t.run != null), isTrue);
   });
 
-  test('builtinTasks depend on themselves in dependencies, dependency-first (F6, D-007)', () {
-    expect(builtin('test').dependsOn, ['^test']);
-    expect(builtin('analyze').dependsOn, ['^analyze']);
-  });
-
   test('hasTests needs at least one *_test.dart under test/, at any depth', () {
     expect(hasTests(ws['with_tests']), isTrue);
     expect(hasTests(ws['empty_test_dir']), isFalse);

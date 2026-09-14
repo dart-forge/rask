@@ -50,18 +50,12 @@ void main() {
 
   test('--filter narrows the packages', () async {
     await rask(['test', '--filter', 'tmp3...']);
-    // tmp3 depends on tmp4; builtin `test` declares dependsOn: ['^test']
-    // (F6), which pulls tmp4's own `test` in too, even though the filter
-    // only asked for tmp3 (and its dependents) — see F6 concerns.
-    expect(dirs(), ['tmp4', 'tmp3', 'tmp1']);
+    expect(dirs(), ['tmp3', 'tmp1']);
   });
 
   test('-F is short for --filter and may repeat', () async {
     await rask(['test', '-F', 'tmp4', '-F', 'tmp1']);
-    // tmp1 depends on tmp3 (which depends on tmp4); dependsOn: ['^test']
-    // (F6) pulls tmp3's own `test` in too, even though only tmp4 and tmp1
-    // were named — see F6 concerns.
-    expect(dirs(), ['tmp4', 'tmp3', 'tmp1']);
+    expect(dirs(), ['tmp4', 'tmp1']);
   });
 
   test('arguments after the command are passed through to dart', () async {

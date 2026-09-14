@@ -72,20 +72,6 @@ void main() {
     expect(out, contains('rask: lib — analyze\n'));
   });
 
-  test("builtin analyze in a dependent package waits for its dependency's analyze (F6, D-007)", () {
-    // app -> lib ; lone. Builtin analyze declares dependsOn: ['^analyze'],
-    // so analyze@lib must be in an earlier stage than analyze@app — by
-    // construction, not by incidental target/insertion order.
-    final g = graph([], 'analyze');
-    final stageOf = <String, int>{};
-    for (var i = 0; i < g.stages.length; i++) {
-      for (final n in g.stages[i]) {
-        stageOf[n.id] = i;
-      }
-    }
-    expect(stageOf['analyze@lib'], lessThan(stageOf['analyze@app']!));
-  });
-
   test('passes args to the task context', () async {
     final (_, runner, _) = await run(graph([], 'test', targets: []), args: ['-x']);
     expect(runner.calls, isEmpty); // no package has tests
@@ -179,16 +165,18 @@ void main() {
 
   group('concurrency and fail-fast (F2, ported from 218f12b:test/run/dart_verb_test.dart)', () {
     // app -> lib ; lone and extra are independent.
-    // The builtin `analyze` depends on itself in dependencies
-    // (dependsOn: ['^analyze'], F6, D-007), so this holds on the builtin
-    // as-is, with no override needed:
+    // The builtin `analyze` has no dependsOn of its own, so its nodes would
+    // all land in a single stage regardless of package dependencies. Merge
+    // in dependsOn: ['^analyze'] (same pattern as the D-037 tests above) so
+    // app@analyze genuinely waits on lib@analyze's stage:
     // stage 0: [lib, lone, extra] (3 independent nodes) ; stage 1: [app]
     setUp(() {
       write('packages/extra/pubspec.yaml', 'name: extra\n');
       ws = Workspace.load(root);
     });
 
-    TaskGraph analyzeGraph({List<Package>? targets}) => graph([], 'analyze', targets: targets);
+    TaskGraph analyzeGraph({List<Package>? targets}) =>
+        graph([Task('analyze', dependsOn: ['^analyze'])], 'analyze', targets: targets);
 
     test('a stage runs at most --jobs packages at once', () async {
       final runner = GatedRunner();
@@ -294,15 +282,11 @@ void main() {
     });
 
     test('a change in a dependency package reruns the dependent', () async {
+      final c = cache();
       final g = graph([], 'analyze', targets: [ws['lib'], ws['app']]);
-      await run(g, c: cache());
+      await run(g, c: c);
       write('packages/lib/lib/l.dart', '// changed');
-      // Fresh TaskCache per call, matching a real second `rask` invocation
-      // (see the "downstream node" test below): reusing one instance across
-      // both calls would keep app's stage-1 key computation memoized on
-      // lib's tree as read *before* the file changed (a `TaskCache` is
-      // documented to live for one process, not across process boundaries).
-      final again = await run(g, c: cache());
+      final again = await run(g, c: c);
       expect(dirs(again.$2), unorderedEquals(['lib', 'app']));
     });
 

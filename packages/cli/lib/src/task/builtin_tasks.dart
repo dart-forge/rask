@@ -23,24 +23,16 @@ bool hasTests(Package pkg) {
 }
 
 /// The tasks every workspace has, with or without a `rask.dart`.
-///
-/// Both depend on the same task in the packages this one depends on, so a
-/// workspace runs dependencies first and a failure upstream stops downstream
-/// (D-007). A `rask.dart` may still override this: `Task('test', dependsOn:
-/// [...])` replaces it (resolveConfig merge: a non-empty dependsOn replaces
-/// the builtin's, so more parallelism is opt-in, not the default).
 final List<Task> builtinTasks = [
   Task(
     'test',
     description: 'Run `dart test` in every package that has tests.',
     where: hasTests,
-    dependsOn: const ['^test'],
     run: (ctx) => ctx.dart(['test', ...ctx.args]),
   ),
   Task(
     'analyze',
     description: 'Run `dart analyze` in every package.',
-    dependsOn: const ['^analyze'],
     run: (ctx) => ctx.dart(['analyze', ...ctx.args]),
   ),
 ];
