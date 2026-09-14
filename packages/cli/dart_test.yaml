@@ -1,0 +1,3 @@
+tags:
+  integration:
+    skip: "Runs dart compile exe (slow). Run with: dart test -t integration --run-skipped"

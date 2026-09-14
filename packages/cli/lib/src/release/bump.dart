@@ -21,7 +21,10 @@ String setVersion(String pubspecYaml, String version) {
 /// `^version`. Map-valued entries (`path:` and friends) and non-members are
 /// left alone.
 String bumpInternalConstraints(
-    String pubspecYaml, Set<String> members, String version) {
+  String pubspecYaml,
+  Set<String> members,
+  String version,
+) {
   final doc = loadYaml(pubspecYaml);
   if (doc is! YamlMap) return pubspecYaml;
 

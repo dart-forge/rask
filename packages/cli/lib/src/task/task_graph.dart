@@ -23,12 +23,16 @@ class ResolvedConfig {
 /// ones the user gave (`where` / `run` / `inputs` / `description` when
 /// non-null, `dependsOn` / `outputs` when non-empty).
 ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
-  final tasks = <String, Task>{for (final t in builtins ?? builtinTasks) t.name: t};
+  final tasks = <String, Task>{
+    for (final t in builtins ?? builtinTasks) t.name: t,
+  };
   final seen = <String>{};
 
   for (final user in config.tasks) {
     if (commandNames.contains(user.name)) {
-      throw ConfigError('"${user.name}" is a rask command and cannot be a task name.');
+      throw ConfigError(
+        '"${user.name}" is a rask command and cannot be a task name.',
+      );
     }
     if (!seen.add(user.name)) {
       throw ConfigError('Task "${user.name}" is defined twice in rask.dart.');
@@ -36,7 +40,9 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
     final base = tasks[user.name];
     if (base == null) {
       if (user.run == null) {
-        throw ConfigError('Task "${user.name}" has no run. Only built-in tasks may omit it.');
+        throw ConfigError(
+          'Task "${user.name}" has no run. Only built-in tasks may omit it.',
+        );
       }
       tasks[user.name] = user;
     } else {
@@ -55,24 +61,31 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
   for (final task in tasks.values) {
     if (task.inputs != null && task.inputs!.isEmpty) {
       throw ConfigError(
-          'Task "${task.name}": inputs must be null (everything) or a non-empty list.');
+        'Task "${task.name}": inputs must be null (everything) or a non-empty list.',
+      );
     }
     for (final glob in task.inputs ?? const []) {
       final segment = glob.split('/').first;
       if (segment == '.dart_tool' || segment == 'build' || segment == '.git') {
-        throw ConfigError('Task "${task.name}": inputs entry "$glob" is under a directory '
-            'rask never reads (.dart_tool/, build/, .git/).');
+        throw ConfigError(
+          'Task "${task.name}": inputs entry "$glob" is under a directory '
+          'rask never reads (.dart_tool/, build/, .git/).',
+        );
       }
     }
     for (final dep in task.dependsOn) {
       final target = dep.startsWith('^') ? dep.substring(1) : dep;
       if (target.isEmpty || target.startsWith('^')) {
-        throw ConfigError('Task "${task.name}": dependsOn entry "$dep" is malformed. '
-            'Use "name" or "^name".');
+        throw ConfigError(
+          'Task "${task.name}": dependsOn entry "$dep" is malformed. '
+          'Use "name" or "^name".',
+        );
       }
       if (!tasks.containsKey(target)) {
-        throw ConfigError('Task "${task.name}" depends on unknown task "$target" '
-            '(known: ${tasks.keys.join(', ')}).');
+        throw ConfigError(
+          'Task "${task.name}" depends on unknown task "$target" '
+          '(known: ${tasks.keys.join(', ')}).',
+        );
       }
     }
   }

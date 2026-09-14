@@ -57,7 +57,11 @@ abstract class TaskContext {
 
   /// Runs any executable, in the package directory unless [workingDirectory]
   /// is given. Throws [ProcessFailure] on a non-zero exit.
-  Future<void> exec(String executable, List<String> args, {String? workingDirectory});
+  Future<void> exec(
+    String executable,
+    List<String> args, {
+    String? workingDirectory,
+  });
 
   /// Writes a `rask: <pkg> — <message>` line.
   void log(String message);
@@ -91,7 +95,8 @@ class RaskConfig {
 }
 
 /// The one function `rask.dart` calls: `final config = defineConfig(...)`.
-RaskConfig defineConfig({List<Task> tasks = const []}) => RaskConfig(tasks: tasks);
+RaskConfig defineConfig({List<Task> tasks = const []}) =>
+    RaskConfig(tasks: tasks);
 
 extension PackageDependsOn on Package {
   /// Whether [packageName] appears in this package's `dependencies` or

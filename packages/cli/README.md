@@ -24,11 +24,27 @@ rask publish --dry-run          # dart pub publish, dependencies first
 ```
 
 Every verb is a *task*: `test` and `analyze` are built in, and a `rask.dart`
-at the workspace root can add more or change theirs (`dependsOn`, `inputs`,
-`outputs`). Loading `rask.dart` is not wired up yet; the engine is. Built-in
-`test` and `analyze` declare no `dependsOn`, so all selected packages run as
-one stage; add `Task('test', dependsOn: ['^test'])` in `rask.dart` to make
-them wait for their dependencies.
+at the workspace root adds more or changes theirs:
+
+```dart
+import 'package:rask/rask.dart';
+
+final config = defineConfig(tasks: [
+  Task('codegen',
+      where: (pkg) => pkg.dependsOn('build_runner'),
+      run: (ctx) => ctx.dart(['run', 'build_runner', 'build']),
+      outputs: ['lib/**.g.dart']),
+  Task('test', dependsOn: ['^codegen']),
+]);
+```
+
+Add `rask: ^<version>` under the root `dev_dependencies` (this workspace
+itself uses `rask: any`, because rask is one of its own members), run
+`rask pub get`, and `rask codegen` exists. The first run after editing
+`rask.dart` compiles it (a few seconds, `rask: compiling rask.dart …` on
+stderr); later runs start in milliseconds. Built-in `test` and `analyze`
+declare no `dependsOn`, so all selected packages run as one stage;
+`dependsOn: ['^test']` makes them wait.
 
 Packages with no `*_test.dart` under `test/` are skipped by `rask test`.
 The first failing package stops the run and its exit code is returned.
@@ -87,6 +103,6 @@ never skips.
 
 ## Status
 
-Early. The task engine (tasks, `dependsOn`, staged parallel runs, cache with
-output verification) is in. Loading `rask.dart`, the codegen declaration API
-and the `dev`/`build` plugin API are not implemented yet.
+Early. Tasks, dependsOn, staged parallel runs, cache with output verification
+and rask.dart loading are in. The codegen declaration API and the dev/build
+plugin API are not implemented yet.

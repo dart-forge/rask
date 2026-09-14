@@ -58,8 +58,15 @@ Future<int> runTaskGraph(
         configKey: configKey,
       );
       if (key != null) keys[node] = key;
-      if (key != null && cache!.isFresh(key, package: node.package, outputs: node.task.outputs)) {
-        out.writeln('rask: ${node.package.name} — ${node.task.name} (cached, skip)');
+      if (key != null &&
+          cache!.isFresh(
+            key,
+            package: node.package,
+            outputs: node.task.outputs,
+          )) {
+        out.writeln(
+          'rask: ${node.package.name} — ${node.task.name} (cached, skip)',
+        );
         continue;
       }
       pending.add(node);
@@ -73,19 +80,34 @@ Future<int> runTaskGraph(
         final node = queue.removeFirst();
         final buffer = stream ? null : StringBuffer();
         final sink = buffer ?? out;
-        if (stream) sink.writeln('rask: ${node.package.name} — ${node.task.name}');
-        final ctx = _RunContext(node, workspace, args, runner, sink, capture: !stream);
+        if (stream) {
+          sink.writeln('rask: ${node.package.name} — ${node.task.name}');
+        }
+        final ctx = _RunContext(
+          node,
+          workspace,
+          args,
+          runner,
+          sink,
+          capture: !stream,
+        );
         int? code;
         try {
           await node.task.run!(ctx);
         } on ProcessFailure catch (e) {
-          sink.writeln('rask: ${node.package.name} — ${node.task.name} failed (exit ${e.exitCode})');
+          sink.writeln(
+            'rask: ${node.package.name} — ${node.task.name} failed (exit ${e.exitCode})',
+          );
           code = e.exitCode;
         } on ProcessException catch (e) {
-          sink.writeln('rask: ${node.package.name} — ${node.task.name} failed ($e)');
+          sink.writeln(
+            'rask: ${node.package.name} — ${node.task.name} failed ($e)',
+          );
           code = exitCannotRun;
         } catch (e, st) {
-          sink.writeln('rask: ${node.package.name} — ${node.task.name} failed ($e)');
+          sink.writeln(
+            'rask: ${node.package.name} — ${node.task.name} failed ($e)',
+          );
           // Error (StateError, ArgumentError, ...) means a bug in the task's
           // Dart code, not an expected failure: keep the stack trace so it
           // can be found without reproducing the run.
@@ -96,17 +118,25 @@ Future<int> runTaskGraph(
           out.writeln('rask: ${node.package.name} — ${node.task.name}');
           out.write(buffer.toString());
         }
-        cache?.invalidate(node.package); // the run may have written into the package
+        cache?.invalidate(
+          node.package,
+        ); // the run may have written into the package
         if (code != null) {
           failure ??= code;
         } else if (cache != null) {
-          cache.storeTask(keys[node]!,
-              package: node.package, task: node.task.name, outputs: node.task.outputs);
+          cache.storeTask(
+            keys[node]!,
+            package: node.package,
+            task: node.task.name,
+            outputs: node.task.outputs,
+          );
         }
       }
     }
 
-    await Future.wait(List.generate(min(jobs, pending.length), (_) => worker()));
+    await Future.wait(
+      List.generate(min(jobs, pending.length), (_) => worker()),
+    );
     if (failure != null) return failure!;
   }
   return 0;
@@ -124,8 +154,14 @@ class _RunContext implements TaskContext {
   final StringSink _sink;
   final bool capture;
 
-  _RunContext(this._node, this.workspace, this.args, this._runner, this._sink,
-      {required this.capture});
+  _RunContext(
+    this._node,
+    this.workspace,
+    this.args,
+    this._runner,
+    this._sink, {
+    required this.capture,
+  });
 
   @override
   Package get package => _node.package;
@@ -134,13 +170,23 @@ class _RunContext implements TaskContext {
   Future<void> dart(List<String> args) => exec('dart', args);
 
   @override
-  Future<void> exec(String executable, List<String> args, {String? workingDirectory}) async {
+  Future<void> exec(
+    String executable,
+    List<String> args, {
+    String? workingDirectory,
+  }) async {
     final dir = workingDirectory ?? package.path;
     final int code;
     if (capture) {
-      final result = await _runner.runCaptured(executable, args, workingDirectory: dir);
+      final result = await _runner.runCaptured(
+        executable,
+        args,
+        workingDirectory: dir,
+      );
       _sink.write(result.output);
-      if (result.output.isNotEmpty && !result.output.endsWith('\n')) _sink.writeln();
+      if (result.output.isNotEmpty && !result.output.endsWith('\n')) {
+        _sink.writeln();
+      }
       code = result.exitCode;
     } else {
       code = await _runner.run(executable, args, workingDirectory: dir);
