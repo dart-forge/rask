@@ -84,7 +84,8 @@ class Launcher {
       entrypoint.writeAsStringSync(entrypointSource);
     }
 
-    String? key = _currentKey(root, depfile, keyFile, exe);
+    final excludeRoots = _excludedRoots();
+    String? key = _currentKey(root, depfile, keyFile, exe, excludeRoots);
     if (key == null) {
       err.writeln('rask: compiling rask.dart …');
       // The cache is valid only when key, depfile and exe agree, so the key
@@ -134,7 +135,7 @@ class Launcher {
         return exitUsage;
       }
       tmp.renameSync(exe.path);
-      key = _keyFrom(root, depfile);
+      key = _keyFrom(root, depfile, excludeRoots);
       keyFile.writeAsStringSync(key);
     }
 
@@ -156,24 +157,57 @@ class Launcher {
   }
 
   /// The recorded key when the compiled exe is still valid, else null.
-  String? _currentKey(Directory root, File depfile, File keyFile, File exe) {
+  String? _currentKey(
+    Directory root,
+    File depfile,
+    File keyFile,
+    File exe,
+    List<String> excludeRoots,
+  ) {
     if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync()) {
       return null;
     }
-    final key = _keyFrom(root, depfile);
+    final key = _keyFrom(root, depfile, excludeRoots);
     return keyFile.readAsStringSync() == key ? key : null;
   }
 
   /// The config key from the depfile's inputs plus [sdkVersion] — computed
   /// after a fresh compile and again to check whether a cached exe is stale.
-  String _keyFrom(Directory root, File depfile) => computeConfigKey(
-    root: root,
-    localInputs: localDepfileInputs(
-      depfile.readAsStringSync(),
-      root: root.path,
-    ),
-    sdkVersion: sdkVersion,
-  );
+  String _keyFrom(Directory root, File depfile, List<String> excludeRoots) =>
+      computeConfigKey(
+        root: root,
+        localInputs: localDepfileInputs(
+          depfile.readAsStringSync(),
+          root: root.path,
+          excludeRoots: excludeRoots,
+        ),
+        sdkVersion: sdkVersion,
+      );
+
+  /// Trees whose files stay out of the config key: the pub cache, which
+  /// `pubspec.lock` covers and which would cost thousands of reads to hash.
+  /// Everything else the depfile lists is hashed, including `path:`
+  /// dependencies outside the workspace (D-051 amendment). The SDK needs no
+  /// entry: `Platform.resolvedExecutable` does not locate it from inside an
+  /// AOT launcher, and a real `dart compile exe` depfile lists no SDK source.
+  List<String> _excludedRoots() {
+    final pubCache = _env('PUB_CACHE');
+    if (pubCache != null && pubCache.isNotEmpty) return [pubCache];
+    if (Platform.isWindows) {
+      final localAppData = _env('LOCALAPPDATA');
+      return localAppData == null || localAppData.isEmpty
+          ? const []
+          : [p.join(localAppData, 'Pub', 'Cache')];
+    }
+    final home = _env('HOME');
+    return home == null || home.isEmpty
+        ? const []
+        : [p.join(home, '.pub-cache')];
+  }
+
+  /// The injected [environment] first — it is what the compiled program will
+  /// see — then the launcher's own.
+  String? _env(String name) => environment[name] ?? Platform.environment[name];
 
   static bool _dependsOnRask(File pubspec) {
     if (!pubspec.existsSync()) return false;

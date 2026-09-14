@@ -151,12 +151,17 @@ class FakeCompiler extends RecordingRunner {
   /// When true, [run] (the exec step) throws instead of returning, as if
   /// the compiled exe could not be started.
   final bool failExec;
+
+  /// Absolute paths appended to the depfile, as a `path:` dependency
+  /// outside the workspace root would appear in a real one.
+  final List<String> extraDepfileInputs;
   int compiles = 0;
   FakeCompiler({
     required this.root,
     this.compileExitCode = 0,
     this.compileOutput = '',
     this.failExec = false,
+    this.extraDepfileInputs = const [],
     super.exitCodes,
   });
 
@@ -182,9 +187,12 @@ class FakeCompiler extends RecordingRunner {
         ..writeAsStringSync('#!fake exe\n');
       if (compileExitCode == 0) {
         final inputs = [
-          '$root/rask.dart',
-          '$root/rask/tasks.dart',
-        ].where((f) => File(f).existsSync()).join(' ');
+          ...[
+            '$root/rask.dart',
+            '$root/rask/tasks.dart',
+          ].where((f) => File(f).existsSync()),
+          ...extraDepfileInputs,
+        ].join(' ');
         File(
           dep,
         ).writeAsStringSync('$out: $inputs /opt/dart-sdk/lib/core/core.dart\n');

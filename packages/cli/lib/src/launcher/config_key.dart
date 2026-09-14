@@ -5,12 +5,24 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/launcher/entrypoint_template.dart';
 
-/// The inputs a `dart compile --depfile` listed that live under [root],
-/// as root-relative posix paths, sorted and unique. SDK and pub-cache
-/// files (outside [root]) are dropped: they are covered by the SDK version
-/// and `pubspec.lock` instead.
-List<String> localDepfileInputs(String depfileContent, {required String root}) {
+/// The inputs a `dart compile --depfile` listed, sorted and unique: those
+/// under [root] as root-relative posix paths, those outside it — a `path:`
+/// dependency in a sibling repo, say — as absolute posix paths, because
+/// editing one must invalidate the exe too (D-051 amendment).
+///
+/// Only inputs under an [excludeRoots] entry are dropped: the pub cache is
+/// covered by `pubspec.lock`, and hashing it would cost thousands of reads.
+/// An entry under [root] is always kept, whatever [excludeRoots] says — a
+/// missing input is a wrong skip, the one outcome worse than a slow run (V).
+List<String> localDepfileInputs(
+  String depfileContent, {
+  required String root,
+  Iterable<String> excludeRoots = const [],
+}) {
   final normalizedRoot = p.normalize(p.absolute(root));
+  final excluded = [
+    for (final dir in excludeRoots) p.normalize(p.absolute(dir)),
+  ];
   final tokens = _tokenizeDepfile(depfileContent);
   // The first token is the target ("entrypoint.exe:"); drop it. Its own
   // content could itself contain a `\ ` escape, so this only works because
@@ -21,8 +33,16 @@ List<String> localDepfileInputs(String depfileContent, {required String root}) {
   final result = <String>{};
   for (final dep in deps) {
     final abs = p.normalize(p.absolute(dep));
-    if (!p.isWithin(normalizedRoot, abs)) continue;
-    result.add(p.posix.joinAll(p.split(p.relative(abs, from: normalizedRoot))));
+    if (p.isWithin(normalizedRoot, abs)) {
+      result.add(
+        p.posix.joinAll(p.split(p.relative(abs, from: normalizedRoot))),
+      );
+      continue;
+    }
+    if (excluded.any((dir) => p.equals(dir, abs) || p.isWithin(dir, abs))) {
+      continue;
+    }
+    result.add(p.posix.joinAll(p.split(abs)));
   }
   return result.toList()..sort();
 }
@@ -75,9 +95,10 @@ List<String> _tokenizeDepfile(String content) {
   return tokens;
 }
 
-/// Hash of everything the compiled entrypoint depends on: the local files
-/// the depfile listed, the root `pubspec.lock`, the SDK version and the
-/// entrypoint template version (D-051). Doubles as `RASK_CONFIG_KEY`.
+/// Hash of everything the compiled entrypoint depends on: the files the
+/// depfile listed (root-relative or absolute, see [localDepfileInputs]),
+/// the root `pubspec.lock`, the SDK version and the entrypoint template
+/// version (D-051). Doubles as `RASK_CONFIG_KEY`.
 String computeConfigKey({
   required Directory root,
   required List<String> localInputs,
@@ -92,7 +113,8 @@ String computeConfigKey({
       'file\tpubspec.lock\t${_hashFile(p.join(root.path, 'pubspec.lock'))}',
     );
   for (final rel in [...localInputs]..sort()) {
-    manifest.writeln('file\t$rel\t${_hashFile(p.join(root.path, rel))}');
+    final path = p.isAbsolute(rel) ? rel : p.join(root.path, rel);
+    manifest.writeln('file\t$rel\t${_hashFile(path)}');
   }
   return sha256.convert(utf8.encode(manifest.toString())).toString();
 }

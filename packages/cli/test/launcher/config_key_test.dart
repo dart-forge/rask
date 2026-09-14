@@ -44,11 +44,39 @@ void main() {
           '$r/.dart_tool/rask/entrypoint.exe: $r/rask/tasks.dart $r/rask.dart '
           '/opt/dart-sdk/lib/core/core.dart /home/me/.pub-cache/hosted/pub.dev/args-2.7.0/lib/args.dart '
           '$r/.dart_tool/package_config.json $r/rask.dart\n';
+      expect(
+        localDepfileInputs(
+          depfile,
+          root: r,
+          excludeRoots: const ['/opt/dart-sdk', '/home/me/.pub-cache'],
+        ),
+        ['.dart_tool/package_config.json', 'rask.dart', 'rask/tasks.dart'],
+      );
+    });
+
+    test('keeps an out-of-root path dependency as an absolute path', () {
+      final r = root.path;
+      final depfile =
+          '$r/out.exe: $r/rask.dart /elsewhere/plugin/lib/plugin.dart\n';
       expect(localDepfileInputs(depfile, root: r), [
-        '.dart_tool/package_config.json',
+        '/elsewhere/plugin/lib/plugin.dart',
         'rask.dart',
-        'rask/tasks.dart',
       ]);
+    });
+
+    test('drops files under an exclude root', () {
+      final r = root.path;
+      final depfile =
+          '$r/out.exe: $r/rask.dart '
+          '/home/me/.pub-cache/hosted/pub.dev/args-2.7.0/lib/args.dart\n';
+      expect(
+        localDepfileInputs(
+          depfile,
+          root: r,
+          excludeRoots: const ['/home/me/.pub-cache'],
+        ),
+        ['rask.dart'],
+      );
     });
 
     test('handles backslash line continuations', () {
@@ -131,6 +159,17 @@ void main() {
       File(p.join(root.path, 'rask/tasks.dart')).deleteSync();
       expect(key(), isNot(before));
     });
+    test('changes when an absolute (out-of-root) input changes', () {
+      final other = Directory.systemTemp.createTempSync('rask_key_other_');
+      addTearDown(() => other.deleteSync(recursive: true));
+      final plugin = File(p.join(other.path, 'plugin.dart'))
+        ..writeAsStringSync('const p = 1;');
+      final inputs = ['rask.dart', p.posix.joinAll(p.split(plugin.path))];
+      final before = key(inputs: inputs);
+      plugin.writeAsStringSync('const p = 2;');
+      expect(key(inputs: inputs), isNot(before));
+    });
+
     test('does not depend on unrelated files', () {
       final before = key();
       write('README.md', 'x');

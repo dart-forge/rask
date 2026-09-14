@@ -240,6 +240,25 @@ void main() {
       });
     }
 
+    test('recompiles when an out-of-root file listed in the depfile changes', () async {
+      final other = Directory.systemTemp.createTempSync('rask_plugin_');
+      addTearDown(() => other.deleteSync(recursive: true));
+      final plugin = File(p.join(other.path, 'plugin.dart'))
+        ..writeAsStringSync('const x = 1;');
+      FakeCompiler compiler() =>
+          FakeCompiler(root: root.path, extraDepfileInputs: [plugin.path]);
+
+      await launcher(r: compiler()).run(['test']);
+      final unchanged = compiler();
+      await launcher(r: unchanged).run(['test']);
+      expect(unchanged.compiles, 0);
+
+      plugin.writeAsStringSync('const x = 2;');
+      final changed = compiler();
+      await launcher(r: changed).run(['test']);
+      expect(changed.compiles, 1);
+    });
+
     test('recompiles when the exe is missing', () async {
       await launcher().run(['test']);
       File(exe()).deleteSync();
