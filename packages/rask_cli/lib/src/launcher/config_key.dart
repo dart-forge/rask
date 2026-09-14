@@ -8,12 +8,12 @@ import 'package:rask_cli/src/launcher/entrypoint_template.dart';
 /// The inputs a `dart compile --depfile` listed, sorted and unique: those
 /// under [root] as root-relative posix paths, those outside it — a `path:`
 /// dependency in a sibling repo, say — as absolute posix paths, because
-/// editing one must invalidate the exe too (D-051 amendment).
+/// editing one must invalidate the exe too.
 ///
 /// Only inputs under an [excludeRoots] entry are dropped: the pub cache is
 /// covered by `pubspec.lock`, and hashing it would cost thousands of reads.
 /// An entry under [root] is always kept, whatever [excludeRoots] says — a
-/// missing input is a wrong skip, the one outcome worse than a slow run (V).
+/// missing input is a wrong skip, the one outcome worse than a slow run.
 List<String> localDepfileInputs(
   String depfileContent, {
   required String root,
@@ -102,7 +102,7 @@ List<String> _tokenizeDepfile(String content) {
 /// Hash of everything the compiled entrypoint depends on: the files the
 /// depfile listed (root-relative or absolute, see [localDepfileInputs]),
 /// the root `pubspec.lock`, the SDK version and the entrypoint template
-/// version (D-051). Doubles as `RASK_CONFIG_KEY`.
+/// version. Doubles as `RASK_CONFIG_KEY`.
 String computeConfigKey({
   required Directory root,
   required List<String> localInputs,

@@ -229,7 +229,7 @@ void main() {
       );
     });
 
-    test('outputsHash sees files under build/ and .dart_tool/ (F1, D-031)', () {
+    test('outputsHash sees files under build/ and .dart_tool/', () {
       final beforeBuild = cache().outputsHash(ws['tmp1'], ['build/**']);
       write('packages/tmp1/build/out.js', 'console.log(1);');
       expect(cache().outputsHash(ws['tmp1'], ['build/**']), isNot(beforeBuild));
@@ -242,7 +242,7 @@ void main() {
       );
     });
 
-    test('isFresh goes false once a build/ output is deleted (F1, D-031)', () {
+    test('isFresh goes false once a build/ output is deleted', () {
       write('packages/tmp1/build/out.js', 'console.log(1);');
       const outputs = ['build/**'];
       final k = key(outputs: outputs);

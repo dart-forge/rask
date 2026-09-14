@@ -87,7 +87,7 @@ void main() {
       ]);
     });
 
-    test('for `pub`, even with a rask.dart (D-050)', () async {
+    test('for `pub`, even with a rask.dart', () async {
       await launcher().run(['pub', 'get', '--offline']);
       expect(builtinCalls, [
         ['pub', 'get', '--offline'],
@@ -289,7 +289,7 @@ void main() {
     test('recompiles when the depfile does not list rask.dart', () async {
       // The entrypoint imports rask.dart, so every depfile lists it; its
       // absence means the depfile is not the one we think it is, and a key
-      // computed from it must not be trusted (V).
+      // computed from it must not be trusted.
       write('notes.txt', 'junk');
       write(
         '.dart_tool/rask/entrypoint.d',

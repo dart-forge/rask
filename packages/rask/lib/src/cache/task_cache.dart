@@ -18,7 +18,7 @@ import 'package:rask/src/workspace/workspace.dart';
 /// wrong skip is worse than a slow run.
 ///
 /// A hit is only a hit if the task's `outputs` still hash to what they did
-/// when the run was recorded (D-031): a fresh clone has the same inputs and
+/// when the run was recorded: a fresh clone has the same inputs and
 /// no outputs.
 ///
 /// One instance is meant to live for one rask process; see [_trees].
@@ -109,7 +109,7 @@ class TaskCache {
   /// Unlike [_tree], this reads through `.dart_tool/` and `build/` (only
   /// `.git/` stays ignored): those are exactly where generated outputs live,
   /// and skipping them made a task with `outputs: ['build/**']` verify
-  /// against nothing (F1, D-031).
+  /// against nothing.
   String outputsHash(Package package, List<String> outputs) {
     if (outputs.isEmpty) return '';
     final globs = outputs.map(Glob.new).toList();

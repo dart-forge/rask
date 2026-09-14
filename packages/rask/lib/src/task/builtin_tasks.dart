@@ -13,7 +13,7 @@ const Set<String> commandNames = {'pub', 'bump', 'publish', 'help'};
 
 /// Whether [pkg] has at least one `*_test.dart` under `test/`. `dart test`
 /// exits 79 when it finds no tests, which would otherwise fail a run for a
-/// package that simply has nothing to test yet (D-008).
+/// package that simply has nothing to test yet.
 bool hasTests(Package pkg) {
   final dir = Directory(p.join(pkg.path, 'test'));
   if (!dir.existsSync()) return false;
