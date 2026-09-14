@@ -98,11 +98,16 @@ class TaskCache {
 
   /// Hash of the files in [package] matching [outputs]; `''` when [outputs]
   /// is empty. Not memoized: outputs change when tasks run.
+  ///
+  /// Unlike [_tree], this reads through `.dart_tool/` and `build/` (only
+  /// `.git/` stays ignored): those are exactly where generated outputs live,
+  /// and skipping them made a task with `outputs: ['build/**']` verify
+  /// against nothing (F1, D-031).
   String outputsHash(Package package, List<String> outputs) {
     if (outputs.isEmpty) return '';
     final globs = outputs.map(Glob.new).toList();
     final manifest = StringBuffer();
-    for (final entry in _readTree(package.path).entries) {
+    for (final entry in _readTree(package.path, ignore: const {'.git'}).entries) {
       if (globs.any((g) => g.matches(entry.key))) {
         manifest.writeln('file\t${entry.key}\t${entry.value}');
       }
@@ -142,14 +147,16 @@ class TaskCache {
   /// The memoized tree of [dir]; see [_trees].
   Map<String, String> _tree(String dir) => _trees.putIfAbsent(dir, () => _readTree(dir));
 
-  /// Reads every regular file under [dir] (skipping [_ignoredDirs], not
-  /// following links) into relative-posix-path -> sha256, sorted by path.
-  static Map<String, String> _readTree(String dir) {
+  /// Reads every regular file under [dir] (skipping [ignore], not following
+  /// links) into relative-posix-path -> sha256, sorted by path. Defaults to
+  /// [_ignoredDirs]; [outputsHash] passes a narrower set so it can see into
+  /// `.dart_tool/` and `build/`.
+  static Map<String, String> _readTree(String dir, {Set<String> ignore = _ignoredDirs}) {
     final files = <String>[];
     void walk(Directory d) {
       for (final entity in d.listSync(followLinks: false)) {
         if (entity is Directory) {
-          if (!_ignoredDirs.contains(p.basename(entity.path))) walk(entity);
+          if (!ignore.contains(p.basename(entity.path))) walk(entity);
         } else if (entity is File) {
           files.add(entity.path);
         }

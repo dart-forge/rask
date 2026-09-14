@@ -230,6 +230,28 @@ void main() {
       expect(checks, 1);
     });
 
+    test('deleting a build/ output makes a cached node run again (F1, D-031)', () async {
+      final c = cache();
+      var runs = 0;
+      final g = graph([
+        Task('build', outputs: ['build/**'], run: (ctx) async {
+          runs++;
+          write('packages/lone/build/out.txt', 'built $runs');
+        }),
+      ], 'build', targets: [ws['lone']]);
+      await run(g, c: c);
+      expect(runs, 1);
+      final hit = await run(g, c: c);
+      expect(hit.$3, contains('cached, skip'));
+      expect(runs, 1);
+
+      Directory(p.join(root.path, 'packages/lone/build')).deleteSync(recursive: true);
+      final miss = await run(g, c: c);
+      expect(miss.$3, isNot(contains('cached, skip')));
+      expect(runs, 2);
+      expect(File(p.join(root.path, 'packages/lone/build/out.txt')).existsSync(), isTrue);
+    });
+
     test('a node\'s own outputs do not invalidate it (stable key)', () async {
       final c = cache();
       var runs = 0;

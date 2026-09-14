@@ -188,5 +188,25 @@ void main() {
       final entry = File(p.join(root.path, '.dart_tool', 'rask', 'cache', k)).readAsStringSync();
       expect(entry, allOf(contains('"task":"codegen"'), contains('"outputsHash":""')));
     });
+
+    test('outputsHash sees files under build/ and .dart_tool/ (F1, D-031)', () {
+      final beforeBuild = cache().outputsHash(ws['tmp1'], ['build/**']);
+      write('packages/tmp1/build/out.js', 'console.log(1);');
+      expect(cache().outputsHash(ws['tmp1'], ['build/**']), isNot(beforeBuild));
+
+      final beforeDartTool = cache().outputsHash(ws['tmp1'], ['.dart_tool/**']);
+      write('packages/tmp1/.dart_tool/out.g.dart', '// generated');
+      expect(cache().outputsHash(ws['tmp1'], ['.dart_tool/**']), isNot(beforeDartTool));
+    });
+
+    test('isFresh goes false once a build/ output is deleted (F1, D-031)', () {
+      write('packages/tmp1/build/out.js', 'console.log(1);');
+      const outputs = ['build/**'];
+      final k = key(outputs: outputs);
+      cache().storeTask(k, package: ws['tmp1'], task: 'build', outputs: outputs);
+      expect(cache().isFresh(k, package: ws['tmp1'], outputs: outputs), isTrue);
+      Directory(p.join(root.path, 'packages/tmp1/build')).deleteSync(recursive: true);
+      expect(cache().isFresh(k, package: ws['tmp1'], outputs: outputs), isFalse);
+    });
   });
 }

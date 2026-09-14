@@ -53,6 +53,13 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
   }
 
   for (final task in tasks.values) {
+    for (final glob in task.inputs ?? const []) {
+      final segment = glob.split('/').first;
+      if (segment == '.dart_tool' || segment == 'build' || segment == '.git') {
+        throw ConfigError('Task "${task.name}": inputs entry "$glob" is under a directory '
+            'rask never reads (.dart_tool/, build/, .git/).');
+      }
+    }
     for (final dep in task.dependsOn) {
       final target = dep.startsWith('^') ? dep.substring(1) : dep;
       if (target.isEmpty || target.startsWith('^')) {

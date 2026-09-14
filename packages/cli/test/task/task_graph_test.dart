@@ -77,6 +77,24 @@ void main() {
       }
     });
 
+    test('rejects an inputs entry under .dart_tool/, build/ or .git/ (F1)', () {
+      for (final dir in ['.dart_tool', 'build', '.git']) {
+        expect(
+          () => resolveConfig(defineConfig(tasks: [Task('a', run: noop, inputs: ['$dir/**'])])),
+          throwsA(isA<ConfigError>().having((e) => e.message, 'message', contains(dir))),
+          reason: 'dir: "$dir"',
+        );
+      }
+    });
+
+    test('outputs under build/ or .dart_tool/ are fine (F1 is about inputs only)', () {
+      expect(
+        () => resolveConfig(
+            defineConfig(tasks: [Task('a', run: noop, outputs: ['build/**', '.dart_tool/**'])])),
+        returnsNormally,
+      );
+    });
+
     test('dependsOn may reference builtins and later-defined user tasks', () {
       final r = resolveConfig(defineConfig(tasks: [
         Task('a', run: noop, dependsOn: ['b', '^test']),
