@@ -183,15 +183,19 @@ void main() {
       expect(await launcher(r: r).run(['test']), 5);
     });
 
-    test('the compile output goes to a temp path and is renamed into place', () async {
-      expect(await launcher().run(['test']), 0);
-      final out = runner.calls.first.$2[runner.calls.first.$2.indexOf('-o') + 1];
-      expect(out, endsWith('.tmp'));
-      expect(out, isNot(exe()));
-      expect(File(exe()).existsSync(), isTrue);
-      expect(File(out).existsSync(), isFalse);
-      expect(leftoverTmps(), isEmpty);
-    });
+    test(
+      'the compile output goes to a temp path and is renamed into place',
+      () async {
+        expect(await launcher().run(['test']), 0);
+        final out =
+            runner.calls.first.$2[runner.calls.first.$2.indexOf('-o') + 1];
+        expect(out, endsWith('.tmp'));
+        expect(out, isNot(exe()));
+        expect(File(exe()).existsSync(), isTrue);
+        expect(File(out).existsSync(), isFalse);
+        expect(leftoverTmps(), isEmpty);
+      },
+    );
 
     test('empty args with a rask.dart still compiles and execs', () async {
       expect(await launcher().run([]), 0);
@@ -240,24 +244,27 @@ void main() {
       });
     }
 
-    test('recompiles when an out-of-root file listed in the depfile changes', () async {
-      final other = Directory.systemTemp.createTempSync('rask_plugin_');
-      addTearDown(() => other.deleteSync(recursive: true));
-      final plugin = File(p.join(other.path, 'plugin.dart'))
-        ..writeAsStringSync('const x = 1;');
-      FakeCompiler compiler() =>
-          FakeCompiler(root: root.path, extraDepfileInputs: [plugin.path]);
+    test(
+      'recompiles when an out-of-root file listed in the depfile changes',
+      () async {
+        final other = Directory.systemTemp.createTempSync('rask_plugin_');
+        addTearDown(() => other.deleteSync(recursive: true));
+        final plugin = File(p.join(other.path, 'plugin.dart'))
+          ..writeAsStringSync('const x = 1;');
+        FakeCompiler compiler() =>
+            FakeCompiler(root: root.path, extraDepfileInputs: [plugin.path]);
 
-      await launcher(r: compiler()).run(['test']);
-      final unchanged = compiler();
-      await launcher(r: unchanged).run(['test']);
-      expect(unchanged.compiles, 0);
+        await launcher(r: compiler()).run(['test']);
+        final unchanged = compiler();
+        await launcher(r: unchanged).run(['test']);
+        expect(unchanged.compiles, 0);
 
-      plugin.writeAsStringSync('const x = 2;');
-      final changed = compiler();
-      await launcher(r: changed).run(['test']);
-      expect(changed.compiles, 1);
-    });
+        plugin.writeAsStringSync('const x = 2;');
+        final changed = compiler();
+        await launcher(r: changed).run(['test']);
+        expect(changed.compiles, 1);
+      },
+    );
 
     test('recompiles when the exe is missing', () async {
       await launcher().run(['test']);
@@ -278,6 +285,29 @@ void main() {
         expect(r2.compiles, 1);
       },
     );
+
+    test('recompiles when the depfile does not list rask.dart', () async {
+      // The entrypoint imports rask.dart, so every depfile lists it; its
+      // absence means the depfile is not the one we think it is, and a key
+      // computed from it must not be trusted (V).
+      write('notes.txt', 'junk');
+      write(
+        '.dart_tool/rask/entrypoint.d',
+        '${exe()}: ${p.join(root.path, 'notes.txt')}\n',
+      );
+      write('.dart_tool/rask/entrypoint.exe', '#!stale exe\n');
+      write(
+        '.dart_tool/rask/entrypoint.key',
+        computeConfigKey(
+          root: root,
+          localInputs: const ['notes.txt'],
+          sdkVersion: '3.13.0',
+        ),
+      );
+      final r = FakeCompiler(root: root.path);
+      await launcher(r: r).run(['test']);
+      expect(r.compiles, 1);
+    });
 
     test('recompiles when the SDK version changes', () async {
       await launcher().run(['test']);

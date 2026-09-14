@@ -89,6 +89,12 @@ void main() {
       ]);
     });
 
+    test('resolves a relative entry against root, not the process cwd', () {
+      expect(localDepfileInputs('out.exe: rask.dart\n', root: root.path), [
+        'rask.dart',
+      ]);
+    });
+
     test('returns an empty list for an empty depfile', () {
       expect(localDepfileInputs('', root: root.path), isEmpty);
     });

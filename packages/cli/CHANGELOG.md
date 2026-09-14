@@ -1,8 +1,8 @@
 ## Unreleased
 
 - rask.dart at the workspace root is loaded: compiled once with dart compile
-  exe (cached by content), then exec'd. Requires rask in the root
-  dev_dependencies. rask pub bypasses it.
+  exe (cached by content), then exec'd. Requires `rask` under the root
+  `dependencies` or `dev_dependencies`. rask pub bypasses it.
 - package:rask/rask.dart now exports only what a rask.dart needs; the
   machinery moved to package:rask/engine.dart.
 - The per-package header line is now `rask: <pkg> — <task>` (it used to be

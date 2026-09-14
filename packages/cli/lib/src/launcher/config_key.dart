@@ -32,7 +32,11 @@ List<String> localDepfileInputs(
       : tokens;
   final result = <String>{};
   for (final dep in deps) {
-    final abs = p.normalize(p.absolute(dep));
+    // A relative entry is relative to the compile's working directory,
+    // which is the root — not this process's cwd.
+    final abs = p.normalize(
+      p.isAbsolute(dep) ? dep : p.join(normalizedRoot, dep),
+    );
     if (p.isWithin(normalizedRoot, abs)) {
       result.add(
         p.posix.joinAll(p.split(p.relative(abs, from: normalizedRoot))),

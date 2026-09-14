@@ -12,7 +12,8 @@ import 'package:rask/src/workspace/workspace.dart';
 import 'package:yaml/yaml.dart';
 
 /// The version this launcher was built from. Keep equal to pubspec.yaml's
-/// `version:`; `rask bump` rewrites it.
+/// `version:`; kept in sync by hand, and
+/// `test/launcher/version_sync_test.dart` fails when it drifts.
 const String raskVersion = '0.0.1';
 
 /// What `dart install`ed rask does before any task runs (D-025, D-048–D-051):
@@ -29,6 +30,11 @@ class Launcher {
   final ProcessRunner runner;
   final StringSink err;
   final Map<String, String> environment;
+
+  /// Inside a `dart install`ed launcher this is the runtime the launcher was
+  /// built with, not the `dart` on PATH; `.dart_tool/package_config.json`'s
+  /// `generatorVersion` (in the depfile) catches SDK upgrades after
+  /// `rask pub get`.
   final String sdkVersion;
   final String launcherVersion;
   final String dartExecutable;
@@ -135,7 +141,7 @@ class Launcher {
         return exitUsage;
       }
       tmp.renameSync(exe.path);
-      key = _keyFrom(root, depfile, excludeRoots);
+      key = _keyFrom(root, _localInputs(root, depfile, excludeRoots));
       keyFile.writeAsStringSync(key);
     }
 
@@ -167,22 +173,35 @@ class Launcher {
     if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync()) {
       return null;
     }
-    final key = _keyFrom(root, depfile, excludeRoots);
+    final inputs = _localInputs(root, depfile, excludeRoots);
+    // The entrypoint imports rask.dart, so every depfile lists it. Its
+    // absence means this is not the depfile we think it is (unparsable,
+    // half-written): a miss costs one compile, a wrong hit runs stale
+    // tasks (V).
+    if (!inputs.contains('rask.dart')) return null;
+    final key = _keyFrom(root, inputs);
     return keyFile.readAsStringSync() == key ? key : null;
   }
 
+  /// The depfile's inputs, root-relative or absolute (see
+  /// [localDepfileInputs]).
+  List<String> _localInputs(
+    Directory root,
+    File depfile,
+    List<String> excludeRoots,
+  ) => localDepfileInputs(
+    depfile.readAsStringSync(),
+    root: root.path,
+    excludeRoots: excludeRoots,
+  );
+
   /// The config key from the depfile's inputs plus [sdkVersion] — computed
   /// after a fresh compile and again to check whether a cached exe is stale.
-  String _keyFrom(Directory root, File depfile, List<String> excludeRoots) =>
-      computeConfigKey(
-        root: root,
-        localInputs: localDepfileInputs(
-          depfile.readAsStringSync(),
-          root: root.path,
-          excludeRoots: excludeRoots,
-        ),
-        sdkVersion: sdkVersion,
-      );
+  String _keyFrom(Directory root, List<String> localInputs) => computeConfigKey(
+    root: root,
+    localInputs: localInputs,
+    sdkVersion: sdkVersion,
+  );
 
   /// Trees whose files stay out of the config key: the pub cache, which
   /// `pubspec.lock` covers and which would cost thousands of reads to hash.

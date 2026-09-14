@@ -38,11 +38,13 @@ final config = defineConfig(tasks: [
 ]);
 ```
 
-Add `rask: any` under the root `dev_dependencies`, run `rask pub get`, and
-`rask codegen` exists. The first run after editing `rask.dart` compiles it
-(a few seconds, `rask: compiling rask.dart …` on stderr); later runs start in
-milliseconds. Built-in `test` and `analyze` declare no `dependsOn`, so all
-selected packages run as one stage; `dependsOn: ['^test']` makes them wait.
+Add `rask: ^<version>` under the root `dev_dependencies` (this workspace
+itself uses `rask: any`, because rask is one of its own members), run
+`rask pub get`, and `rask codegen` exists. The first run after editing
+`rask.dart` compiles it (a few seconds, `rask: compiling rask.dart …` on
+stderr); later runs start in milliseconds. Built-in `test` and `analyze`
+declare no `dependsOn`, so all selected packages run as one stage;
+`dependsOn: ['^test']` makes them wait.
 
 Packages with no `*_test.dart` under `test/` are skipped by `rask test`.
 The first failing package stops the run and its exit code is returned.

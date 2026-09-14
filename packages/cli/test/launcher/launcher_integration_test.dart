@@ -8,10 +8,10 @@ import 'package:rask/src/launcher/launcher.dart';
 import 'package:rask/src/run/process_runner.dart';
 import 'package:test/test.dart';
 
-/// The one test that really runs `dart compile exe` (D-033). It builds a
-/// throwaway workspace whose root depends on this very package by path,
-/// puts a rask.dart with a custom task in it, and drives [Launcher] with
-/// the real process runner.
+/// The only tests that really run `dart compile exe` (D-033). They share a
+/// throwaway workspace whose root depends on this very package by path and
+/// holds a rask.dart with a custom task, and drive [Launcher] with the real
+/// process runner.
 void main() {
   late Directory root;
   final cliDir = Directory.current.path; // packages/cli
@@ -86,6 +86,8 @@ final config = defineConfig(tasks: [
     expect(hello.existsSync(), isTrue);
   }, timeout: const Timeout(Duration(minutes: 3)));
 
+  // Deliberately mutates the shared root's rask.dart, so it must run after
+  // the test above (the default declaration order does that).
   test(
     'a config without `config` fails with the convention hint and exit 64',
     () async {

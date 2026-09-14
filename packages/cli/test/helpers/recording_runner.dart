@@ -215,12 +215,7 @@ class FakeCompiler extends RecordingRunner {
     Map<String, String>? environment,
   }) async {
     if (failExec) {
-      throw ProcessException(
-        'entrypoint.exe',
-        const [],
-        'Exec format error',
-        8,
-      );
+      throw ProcessException(executable, const [], 'Exec format error', 8);
     }
     calls.add((executable, args, workingDirectory));
     environments.add(environment);
