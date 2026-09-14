@@ -1,7 +1,7 @@
 name: rask
-description: A sample command-line application with basic argument parsing.
+description: Workspace-aware task runner for Dart — the library. Write tasks in rask.dart with package:rask/rask.dart; the command is package:rask_cli.
 version: 0.0.1
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/dosukoi-android/rask
 resolution: workspace
 
 environment:

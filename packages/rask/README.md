@@ -1,5 +1,7 @@
 # rask
 
+Install the command with `dart install rask_cli`; this package is what a `rask.dart` imports.
+
 Workspace-aware task runner for Dart. The verbs `dart` is missing.
 
 `dart` knows how to test, analyze and publish one package. rask runs those verbs
@@ -102,6 +104,8 @@ the run stops rather than guessing. `--dry-run` passes `--dry-run` through and
 never skips.
 
 ## Status
+
+Split into rask (library) and rask_cli (command) — see CHANGELOG.
 
 Early. Tasks, dependsOn, staged parallel runs, cache with output verification
 and rask.dart loading are in. The codegen declaration API and the dev/build
