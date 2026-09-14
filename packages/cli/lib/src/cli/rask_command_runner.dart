@@ -6,9 +6,12 @@ import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
 import 'package:rask/src/release/bump.dart';
 import 'package:rask/src/release/publish.dart';
-import 'package:rask/src/run/dart_verb.dart';
 import 'package:rask/src/run/process_runner.dart';
+import 'package:rask/src/task/task.dart';
+import 'package:rask/src/task/task_graph.dart';
+import 'package:rask/src/task/task_runner.dart';
 import 'package:rask/src/workspace/filter.dart';
+import 'package:rask/src/workspace/topological_order.dart';
 import 'package:rask/src/workspace/workspace.dart';
 
 /// Exit code for usage errors (wrong arguments, not in a workspace).
@@ -22,22 +25,38 @@ class RaskCommandRunner {
   final ProcessRunner processRunner;
   final PackageRegistry registry;
   final StringSink out;
+  final RaskConfig config;
+
+  /// Identifies the `rask.dart` in effect; part of every cache key.
+  final String configKey;
 
   RaskCommandRunner({
     required this.cwd,
     this.processRunner = const SystemProcessRunner(),
     this.registry = const HttpPackageRegistry(),
     StringSink? out,
+    this.config = const RaskConfig(),
+    this.configKey = '',
   }) : out = out ?? stdout;
 
   /// Runs [args] and returns the process exit code.
   Future<int> run(List<String> args) async {
+    final ResolvedConfig resolved;
+    try {
+      resolved = resolveConfig(config);
+    } on ConfigError catch (e) {
+      out.writeln('rask: $e');
+      return exitUsage;
+    }
+
     final runner = CommandRunner<int>(
       'rask',
       'Workspace-aware task runner for Dart. The verbs dart is missing.',
-    )
-      ..addCommand(_DartVerbCommand('test', 'Run `dart test` in every package.', this))
-      ..addCommand(_DartVerbCommand('analyze', 'Run `dart analyze` in every package.', this))
+    );
+    for (final task in resolved.tasks.values) {
+      runner.addCommand(_TaskCommand(task, resolved, this));
+    }
+    runner
       ..addCommand(_PubCommand(this))
       ..addCommand(_BumpCommand(this))
       ..addCommand(_PublishCommand(this));
@@ -76,15 +95,13 @@ class _RaskError implements Exception {
   _RaskError(this.message);
 }
 
-/// `rask test` / `rask analyze`: the dart verb, fanned out over the workspace.
-class _DartVerbCommand extends Command<int> {
-  @override
-  final String name;
-  @override
-  final String description;
+/// `rask <task>`: one task fanned out over the workspace.
+class _TaskCommand extends Command<int> {
+  final Task task;
+  final ResolvedConfig resolved;
   final RaskCommandRunner rask;
 
-  _DartVerbCommand(this.name, this.description, this.rask) {
+  _TaskCommand(this.task, this.resolved, this.rask) {
     argParser.addMultiOption(
       'filter',
       abbr: 'F',
@@ -109,13 +126,19 @@ class _DartVerbCommand extends Command<int> {
   }
 
   @override
+  String get name => task.name;
+
+  @override
+  String get description => task.description ?? 'Run the "${task.name}" task from rask.dart.';
+
+  @override
   String get invocation =>
-      'rask $name [-F <package>] [-j <N>] [--no-cache] [-- <dart $name args>]';
+      'rask ${task.name} [-F <package>] [-j <N>] [--no-cache] [-- <args>]';
 
   @override
   Future<int> run() async {
     final ws = rask._loadWorkspace();
-    final packages = rask._select(ws, argResults!.multiOption('filter'));
+    final targets = rask._select(ws, argResults!.multiOption('filter'));
     final cache = argResults!.flag('cache')
         ? TaskCache(
             workspace: ws,
@@ -127,15 +150,23 @@ class _DartVerbCommand extends Command<int> {
     if (jobs == null || jobs < 1) {
       throw _RaskError('--jobs must be a positive integer, got "$jobsArg"');
     }
-    return runDartVerb(
-      name,
-      packages: packages,
+
+    final TaskGraph graph;
+    try {
+      graph = buildTaskGraph(config: resolved, task: task.name, targets: targets, workspace: ws);
+    } on CyclicDependencyException catch (e) {
+      throw _RaskError(e.toString());
+    }
+    return runTaskGraph(
+      graph,
       workspace: ws,
       runner: rask.processRunner,
       out: rask.out,
-      extraArgs: argResults!.rest,
+      args: argResults!.rest,
       cache: cache,
+      configKey: rask.configKey,
       jobs: jobs,
+      taskName: task.name,
     );
   }
 }

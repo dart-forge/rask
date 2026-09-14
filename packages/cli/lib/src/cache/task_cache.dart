@@ -2,19 +2,26 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/workspace/workspace.dart';
 
 /// Remembers which task runs have already succeeded for a given set of
 /// inputs, so an unchanged task can be skipped.
 ///
-/// The key for a task is a content hash of everything that could change its
-/// outcome: every file in the package and in the workspace members it depends
-/// on (transitively), the root `pubspec.yaml` and `pubspec.lock`, the Dart SDK
-/// version, and the verb with its arguments. It is never derived from git
-/// state or file timestamps — a wrong skip is worse than a slow run.
+/// A key is a content hash of everything that could change the outcome:
+/// the package's files (narrowed by the task's `inputs`, minus its own
+/// `outputs`), every file of the workspace members it depends on
+/// (transitively), the root `pubspec.yaml` and `pubspec.lock`, the Dart SDK
+/// version, the task with its arguments, the keys of the tasks it depends
+/// on, and the configuration key. Never git state, never timestamps — a
+/// wrong skip is worse than a slow run.
 ///
-/// One instance is meant to live for one rask process; see [_manifests].
+/// A hit is only a hit if the task's `outputs` still hash to what they did
+/// when the run was recorded (D-031): a fresh clone has the same inputs and
+/// no outputs.
+///
+/// One instance is meant to live for one rask process; see [_trees].
 class TaskCache {
   final Workspace workspace;
 
@@ -32,68 +39,123 @@ class TaskCache {
   /// Directory names that never influence a task's outcome.
   static const _ignoredDirs = {'.dart_tool', 'build', '.git'};
 
-  /// Directory manifests computed so far, by absolute package path.
-  ///
-  /// One [TaskCache] lives for one rask process, and nothing on disk is
-  /// expected to change underneath it, so a dependency's tree is read once
-  /// no matter how many dependents include it in their key. A new process
-  /// gets a new instance and reads everything again.
-  final Map<String, String> _manifests = {};
+  /// Package trees read so far: absolute package path -> (relative posix
+  /// path -> sha256). One [TaskCache] lives for one rask process, and
+  /// nothing on disk is expected to change underneath it, so a dependency's
+  /// tree is read once no matter how many dependents include it.
+  final Map<String, Map<String, String>> _trees = {};
 
-  /// The cache key for running `dart <verb> <args>` in [package].
-  String keyFor(Package package, String verb, List<String> args) {
+  /// The cache key for running [task] with [args] in [package].
+  ///
+  /// [inputs] narrows the package's own files (null = all); files matching
+  /// [outputs] are excluded from them. Dependency members always contribute
+  /// all their files. [dependsOnKeys] are the keys of the nodes this one
+  /// depends on; [configKey] identifies the `rask.dart` in effect.
+  String keyForTask({
+    required Package package,
+    required String task,
+    required List<String> args,
+    List<String>? inputs,
+    List<String> outputs = const [],
+    List<String> dependsOnKeys = const [],
+    String configKey = '',
+  }) {
     final root = workspace.root.path;
     final manifest = StringBuffer()
-      ..writeln('rask-cache-v1')
+      ..writeln('rask-cache-v2')
       ..writeln('sdk\t$sdkVersion')
-      ..writeln('verb\t$verb')
+      ..writeln('task\t$task')
       ..writeln('args\t${jsonEncode(args)}')
       ..writeln('package\t${package.name}\t${p.relative(package.path, from: root)}')
       ..writeln('root\tpubspec.yaml\t${_hashFile(p.join(root, 'pubspec.yaml'))}')
-      ..writeln('root\tpubspec.lock\t${_hashFile(p.join(root, 'pubspec.lock'))}');
+      ..writeln('root\tpubspec.lock\t${_hashFile(p.join(root, 'pubspec.lock'))}')
+      ..writeln('config\t$configKey')
+      ..writeln('inputs\t${inputs == null ? '*' : jsonEncode(inputs)}');
 
-    final inputs = [package, ...workspace.dependenciesOf(package.name)]
-      ..sort((a, b) => a.path.compareTo(b.path));
-    for (final pkg in inputs) {
-      manifest.writeln('member\t${p.relative(pkg.path, from: root)}');
-      manifest.write(_directoryManifest(pkg.path));
+    final inputGlobs = inputs?.map(Glob.new).toList();
+    final outputGlobs = outputs.map(Glob.new).toList();
+    final own = _tree(package.path);
+    for (final entry in own.entries) {
+      final path = entry.key;
+      if (inputGlobs != null && !inputGlobs.any((g) => g.matches(path))) continue;
+      if (outputGlobs.any((g) => g.matches(path))) continue;
+      manifest.writeln('file\t$path\t${entry.value}');
     }
 
-    return sha256.convert(utf8.encode(manifest.toString())).toString();
+    final deps = workspace.dependenciesOf(package.name).toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    for (final dep in deps) {
+      manifest.writeln('dep\t${p.relative(dep.path, from: root)}');
+      _writeTree(manifest, _tree(dep.path));
+    }
+
+    for (final k in [...dependsOnKeys]..sort()) {
+      manifest.writeln('dependsOn\t$k');
+    }
+    return _sha(manifest.toString());
   }
 
-  bool contains(String key) => _entry(key).existsSync();
+  /// Hash of the files in [package] matching [outputs]; `''` when [outputs]
+  /// is empty. Not memoized: outputs change when tasks run.
+  ///
+  /// Unlike [_tree], this reads through `.dart_tool/` and `build/` (only
+  /// `.git/` stays ignored): those are exactly where generated outputs live,
+  /// and skipping them made a task with `outputs: ['build/**']` verify
+  /// against nothing (F1, D-031).
+  String outputsHash(Package package, List<String> outputs) {
+    if (outputs.isEmpty) return '';
+    final globs = outputs.map(Glob.new).toList();
+    final manifest = StringBuffer();
+    for (final entry in _readTree(package.path, ignore: const {'.git'}).entries) {
+      if (globs.any((g) => g.matches(entry.key))) {
+        manifest.writeln('file\t${entry.key}\t${entry.value}');
+      }
+    }
+    return _sha(manifest.toString());
+  }
 
-  /// Records that the task identified by [key] succeeded.
-  void store(String key, {required Package package, required String verb}) {
+  /// Whether [key] was recorded and the package's [outputs] still hash to
+  /// what they did then.
+  bool isFresh(String key, {required Package package, required List<String> outputs}) {
+    final entry = _entry(key);
+    if (!entry.existsSync()) return false;
+    final recorded = jsonDecode(entry.readAsStringSync()) as Map<String, dynamic>;
+    return recorded['outputsHash'] == outputsHash(package, outputs);
+  }
+
+  /// Forgets the memoized tree of [package]. Call after a task ran in it:
+  /// the run may have written files that later keys must see.
+  void invalidate(Package package) => _trees.remove(package.path);
+
+  /// Records that [task] succeeded in [package] with the current [outputs].
+  void storeTask(String key,
+      {required Package package, required String task, required List<String> outputs}) {
     directory.createSync(recursive: true);
     _entry(key).writeAsStringSync(jsonEncode({
       'package': package.name,
-      'verb': verb,
+      'task': task,
+      'outputsHash': outputsHash(package, outputs),
       'storedAt': DateTime.now().toUtc().toIso8601String(),
     }));
   }
 
+  // ---------------------------------------------------------------- internals
+
   File _entry(String key) => File(p.join(directory.path, key));
 
-  /// The `file\t<relative path>\t<sha256>` lines for every regular file under
-  /// [dir], in sorted path order, skipping [_ignoredDirs]. Memoized per
-  /// instance (see [_manifests]).
-  String _directoryManifest(String dir) => _manifests.putIfAbsent(dir, () {
-        final manifest = StringBuffer();
-        _writeDirectoryManifest(dir, manifest);
-        return manifest.toString();
-      });
+  /// The memoized tree of [dir]; see [_trees].
+  Map<String, String> _tree(String dir) => _trees.putIfAbsent(dir, () => _readTree(dir));
 
-  /// Appends one `file\t<relative path>\t<sha256>` line per regular file under
-  /// [dir], in sorted path order, skipping [_ignoredDirs].
-  static void _writeDirectoryManifest(String dir, StringBuffer manifest) {
+  /// Reads every regular file under [dir] (skipping [ignore], not following
+  /// links) into relative-posix-path -> sha256, sorted by path. Defaults to
+  /// [_ignoredDirs]; [outputsHash] passes a narrower set so it can see into
+  /// `.dart_tool/` and `build/`.
+  static Map<String, String> _readTree(String dir, {Set<String> ignore = _ignoredDirs}) {
     final files = <String>[];
     void walk(Directory d) {
       for (final entity in d.listSync(followLinks: false)) {
-        final name = p.basename(entity.path);
         if (entity is Directory) {
-          if (!_ignoredDirs.contains(name)) walk(entity);
+          if (!ignore.contains(p.basename(entity.path))) walk(entity);
         } else if (entity is File) {
           files.add(entity.path);
         }
@@ -101,8 +163,15 @@ class TaskCache {
     }
     walk(Directory(dir));
     files.sort();
-    for (final file in files) {
-      manifest.writeln('file\t${p.relative(file, from: dir)}\t${_hashFile(file)}');
+    return {
+      for (final file in files)
+        p.posix.joinAll(p.split(p.relative(file, from: dir))): _hashFile(file),
+    };
+  }
+
+  static void _writeTree(StringBuffer manifest, Map<String, String> tree) {
+    for (final entry in tree.entries) {
+      manifest.writeln('file\t${entry.key}\t${entry.value}');
     }
   }
 
@@ -111,4 +180,6 @@ class TaskCache {
     if (!file.existsSync()) return '-';
     return sha256.convert(file.readAsBytesSync()).toString();
   }
+
+  static String _sha(String s) => sha256.convert(utf8.encode(s)).toString();
 }
