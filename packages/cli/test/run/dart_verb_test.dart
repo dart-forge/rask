@@ -105,21 +105,20 @@ void main() {
   });
 
   group('with a TaskCache', () {
-    late TaskCache cache;
+    late Directory cacheDir;
     setUp(() {
       File(p.join(ws['tmp2'].path, 'lib', 'x.dart')).createSync(recursive: true);
-      cache = TaskCache(
-        workspace: ws,
-        directory: Directory(p.join(root.path, '.dart_tool', 'rask', 'cache')),
-        sdkVersion: '3.13.0',
-      );
+      cacheDir = Directory(p.join(root.path, '.dart_tool', 'rask', 'cache'));
     });
+
+    // one TaskCache instance per simulated rask process
+    TaskCache newCache() => TaskCache(workspace: ws, directory: cacheDir, sdkVersion: '3.13.0');
 
     Future<(int, RecordingRunner, String)> run({Map<String, int> exitCodes = const {}}) async {
       final runner = RecordingRunner(exitCodes: exitCodes);
       final out = StringBuffer();
       final code = await runDartVerb('analyze',
-          packages: [ws['tmp2']], runner: runner, out: out, cache: cache);
+          packages: [ws['tmp2']], runner: runner, out: out, cache: newCache());
       return (code, runner, out.toString());
     }
 
@@ -150,7 +149,7 @@ void main() {
     test('changing a dependency runs the dependent again', () async {
       final runner = RecordingRunner();
       Future<int> both() => runDartVerb('analyze',
-          packages: [ws['tmp2'], ws['tmp1']], runner: runner, out: StringBuffer(), cache: cache);
+          packages: [ws['tmp2'], ws['tmp1']], runner: runner, out: StringBuffer(), cache: newCache());
       await both();
       expect(runner.calls, hasLength(2));
       File(p.join(ws['tmp2'].path, 'lib', 'x.dart')).writeAsStringSync('// changed');

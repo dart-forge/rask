@@ -119,6 +119,16 @@ void main() {
       final keys = ws.packages.where((x) => x.name == 'tmp4').map((x) => c.keyFor(x, 'test', const [])).toSet();
       expect(keys, hasLength(2));
     });
+
+    test('one instance reads a directory once: a later change is not seen until a new instance', () {
+      final c = cache();
+      final before = c.keyFor(ws['tmp1'], 'test', const []);
+      write('packages/tmp4/lib/d.dart', 'int d = 40;'); // tmp1 -> tmp3 -> tmp4
+      // same instance: manifest of tmp4 is memoized, key unchanged
+      expect(c.keyFor(ws['tmp1'], 'test', const []), before);
+      // new instance (= new process): sees the change
+      expect(cache().keyFor(ws['tmp1'], 'test', const []), isNot(before));
+    });
   });
 
   group('contains / store', () {
