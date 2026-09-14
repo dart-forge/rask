@@ -14,7 +14,7 @@ import 'package:test/test.dart';
 /// process runner.
 void main() {
   late Directory root;
-  final cliDir = Directory.current.path; // packages/cli
+  final cliDir = Directory.current.path; // packages/rask
 
   setUpAll(() async {
     root = Directory.systemTemp.createTempSync('rask_launcher_it_');
