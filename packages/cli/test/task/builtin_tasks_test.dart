@@ -74,11 +74,15 @@ void main() {
   test('test runs `dart test <args>`; analyze runs `dart analyze <args>`', () async {
     final ctx = FakeContext(ws['with_tests'], ws, args: ['--reporter', 'expanded']);
     await builtin('test').run!(ctx);
-    expect(ctx.calls, [('dart', ['test', '--reporter', 'expanded'])]);
+    // records compare their fields with ==, and List == is identity, so
+    // assert on the fields rather than on whole records
+    expect(ctx.calls.single.$1, 'dart');
+    expect(ctx.calls.single.$2, ['test', '--reporter', 'expanded']);
 
     final ctx2 = FakeContext(ws['with_tests'], ws);
     await builtin('analyze').run!(ctx2);
-    expect(ctx2.calls, [('dart', ['analyze'])]);
+    expect(ctx2.calls.single.$1, 'dart');
+    expect(ctx2.calls.single.$2, ['analyze']);
   });
 
   test('commandNames are the non-task verbs', () {
