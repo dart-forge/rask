@@ -87,6 +87,20 @@ class Launcher {
     String? key = _currentKey(root, depfile, keyFile, exe);
     if (key == null) {
       err.writeln('rask: compiling rask.dart …');
+      // The cache is valid only when key, depfile and exe agree, so the key
+      // goes first: the front end writes the depfile early, and an
+      // interrupted compile would otherwise leave a NEW depfile beside an
+      // OLD key. Without a key the next run is a miss, never a wrong hit.
+      if (keyFile.existsSync()) keyFile.deleteSync();
+      // Compile to a temp path and rename it into place. Overwriting the exe
+      // where it lies would kill a rask that is executing it (the ad-hoc
+      // signature on macOS) or fail with ETXTBSY on Linux; the rename is
+      // atomic on the same filesystem, so a process running the old inode
+      // keeps working. Two concurrent compiles can still make this process
+      // read the other's depfile, but both compiled the same inputs, so the
+      // key recorded here is correct for whichever exe the last rename left
+      // behind.
+      final tmp = File('${exe.path}.$pid.tmp');
       final CapturedProcess result;
       try {
         result = await runner.runCaptured(dartExecutable, [
@@ -94,15 +108,17 @@ class Launcher {
           'exe',
           entrypoint.path,
           '-o',
-          exe.path,
+          tmp.path,
           '--depfile',
           depfile.path,
         ], workingDirectory: root.path);
       } on ProcessException catch (e) {
+        if (tmp.existsSync()) tmp.deleteSync();
         err.writeln('rask: could not run ${e.executable}: ${e.message}');
         return exitCannotRun;
       }
       if (result.exitCode != 0) {
+        if (tmp.existsSync()) tmp.deleteSync();
         // The two shapes the front end reports a missing `config` with:
         // `Undefined name 'config'.` and `Getter not found: 'config'.`
         if (RegExp(r"(Undefined name|Getter not found:) 'config'")
@@ -117,6 +133,7 @@ class Launcher {
         }
         return exitUsage;
       }
+      tmp.renameSync(exe.path);
       key = _keyFrom(root, depfile);
       keyFile.writeAsStringSync(key);
     }

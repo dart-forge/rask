@@ -61,6 +61,12 @@ void main() {
       File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.dart'));
   File keyFile() =>
       File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.key'));
+  List<String> leftoverTmps() =>
+      Directory(p.join(root.path, '.dart_tool', 'rask'))
+          .listSync()
+          .map((e) => p.basename(e.path))
+          .where((name) => name.endsWith('.tmp'))
+          .toList();
 
   group('falls back to the builtin config', () {
     test('when there is no rask.dart', () async {
@@ -137,7 +143,9 @@ void main() {
       final compile = runner.calls.first;
       expect(compile.$1, 'dart');
       expect(compile.$2.take(2), ['compile', 'exe']);
-      expect(compile.$2, containsAllInOrder(['-o', exe()]));
+      final out = compile.$2[compile.$2.indexOf('-o') + 1];
+      expect(out, startsWith(exe())); // a temp path beside the exe (F1)
+      expect(out, endsWith('.tmp'));
       expect(compile.$2, contains('--depfile'));
       expect(compile.$3, root.path);
       expect(err.toString(), contains('compiling rask.dart'));
@@ -173,6 +181,16 @@ void main() {
     test('returns the exe\'s exit code', () async {
       final r = FakeCompiler(root: root.path, exitCodes: {'entrypoint.exe': 5});
       expect(await launcher(r: r).run(['test']), 5);
+    });
+
+    test('the compile output goes to a temp path and is renamed into place', () async {
+      expect(await launcher().run(['test']), 0);
+      final out = runner.calls.first.$2[runner.calls.first.$2.indexOf('-o') + 1];
+      expect(out, endsWith('.tmp'));
+      expect(out, isNot(exe()));
+      expect(File(exe()).existsSync(), isTrue);
+      expect(File(out).existsSync(), isFalse);
+      expect(leftoverTmps(), isEmpty);
     });
 
     test('empty args with a rask.dart still compiles and execs', () async {
@@ -289,6 +307,23 @@ void main() {
     test('does not record a key after a failed compile', () async {
       final r = FakeCompiler(root: root.path, compileExitCode: 1);
       await launcher(r: r).run(['test']);
+      expect(keyFile().existsSync(), isFalse);
+    });
+
+    test('the exe path is not written until the compile succeeds', () async {
+      final r = FakeCompiler(root: root.path, compileExitCode: 1);
+      await launcher(r: r).run(['test']);
+      expect(File(exe()).existsSync(), isFalse);
+      expect(leftoverTmps(), isEmpty);
+    });
+
+    test('a stale key is removed before compiling', () async {
+      write('.dart_tool/rask/entrypoint.key', 'bogus-key');
+      write('.dart_tool/rask/entrypoint.d', 'entrypoint.exe: rask.dart\n');
+      write('.dart_tool/rask/entrypoint.exe', '#!stale exe\n');
+      final r = FakeCompiler(root: root.path, compileExitCode: 1);
+      await launcher(r: r).run(['test']);
+      expect(r.compiles, 1);
       expect(keyFile().existsSync(), isFalse);
     });
   });

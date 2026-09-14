@@ -174,10 +174,13 @@ class FakeCompiler extends RecordingRunner {
       environments.add(environment);
       final out = args[args.indexOf('-o') + 1];
       final dep = args[args.indexOf('--depfile') + 1];
+      // Written even when the compile fails: a real compile can leave a
+      // partial output behind, and the launcher must not leave it lying
+      // around (F1).
+      File(out)
+        ..createSync(recursive: true)
+        ..writeAsStringSync('#!fake exe\n');
       if (compileExitCode == 0) {
-        File(out)
-          ..createSync(recursive: true)
-          ..writeAsStringSync('#!fake exe\n');
         final inputs = [
           '$root/rask.dart',
           '$root/rask/tasks.dart',
