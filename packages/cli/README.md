@@ -23,6 +23,10 @@ rask bump 0.2.0                 # lockstep version bump across the workspace
 rask publish --dry-run          # dart pub publish, dependencies first
 ```
 
+Every verb is a *task*: `test` and `analyze` are built in, and a `rask.dart`
+at the workspace root can add more or change theirs (`dependsOn`, `inputs`,
+`outputs`). Loading `rask.dart` is not wired up yet; the engine is.
+
 Packages with no `*_test.dart` under `test/` are skipped by `rask test`.
 The first failing package stops the run and its exit code is returned.
 
@@ -72,5 +76,6 @@ never skips.
 
 ## Status
 
-Early. `rask run`, `rask.dart` configuration and the `dev`/`build` plugin API
-are not implemented yet.
+Early. The task engine (tasks, `dependsOn`, staged parallel runs, cache with
+output verification) is in. Loading `rask.dart`, the codegen declaration API
+and the `dev`/`build` plugin API are not implemented yet.
