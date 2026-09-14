@@ -92,3 +92,50 @@ class NoRegistry implements PackageRegistry {
   Future<bool> hasVersion({required String host, required String name, required String version}) async =>
       false;
 }
+
+/// A [RecordingRunner] that fakes `dart compile exe`: it writes the `-o`
+/// file and a depfile listing the workspace's rask.dart and rask/tasks.dart
+/// (when they exist) plus one SDK path, then returns [compileExitCode].
+class FakeCompiler extends RecordingRunner {
+  final String root;
+  final int compileExitCode;
+  final String compileOutput;
+  int compiles = 0;
+  FakeCompiler({
+    required this.root,
+    this.compileExitCode = 0,
+    this.compileOutput = '',
+    super.exitCodes,
+  });
+
+  @override
+  Future<CapturedProcess> runCaptured(String executable, List<String> args,
+      {required String workingDirectory, Map<String, String>? environment}) async {
+    if (executable == 'dart' && args.take(2).toList().join(' ') == 'compile exe') {
+      compiles++;
+      calls.add((executable, args, workingDirectory));
+      environments.add(environment);
+      final out = args[args.indexOf('-o') + 1];
+      final dep = args[args.indexOf('--depfile') + 1];
+      if (compileExitCode == 0) {
+        File(out)
+          ..createSync(recursive: true)
+          ..writeAsStringSync('#!fake exe\n');
+        final inputs = ['$root/rask.dart', '$root/rask/tasks.dart']
+            .where((f) => File(f).existsSync())
+            .join(' ');
+        File(dep).writeAsStringSync('$out: $inputs /opt/dart-sdk/lib/core/core.dart\n');
+      }
+      return CapturedProcess(compileExitCode, compileOutput);
+    }
+    return super.runCaptured(executable, args, workingDirectory: workingDirectory, environment: environment);
+  }
+
+  @override
+  Future<int> run(String executable, List<String> args,
+      {required String workingDirectory, Map<String, String>? environment}) async {
+    calls.add((executable, args, workingDirectory));
+    environments.add(environment);
+    return exitCodes[p.basename(executable)] ?? exitCodes[p.basename(workingDirectory)] ?? 0;
+  }
+}
