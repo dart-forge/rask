@@ -14,5 +14,4 @@ export 'src/task/builtin_tasks.dart';
 export 'src/task/task_graph.dart';
 export 'src/task/task_runner.dart';
 export 'src/workspace/filter.dart';
-export 'src/workspace/stages.dart';
 export 'src/workspace/topological_order.dart';
