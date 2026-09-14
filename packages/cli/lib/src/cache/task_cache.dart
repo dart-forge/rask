@@ -83,8 +83,9 @@ class TaskCache {
     final own = _tree(package.path);
     for (final entry in own.entries) {
       final path = entry.key;
-      if (inputGlobs != null && !inputGlobs.any((g) => g.matches(path)))
+      if (inputGlobs != null && !inputGlobs.any((g) => g.matches(path))) {
         continue;
+      }
       if (outputGlobs.any((g) => g.matches(path))) continue;
       manifest.writeln('file\t$path\t${entry.value}');
     }

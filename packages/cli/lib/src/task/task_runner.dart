@@ -80,8 +80,9 @@ Future<int> runTaskGraph(
         final node = queue.removeFirst();
         final buffer = stream ? null : StringBuffer();
         final sink = buffer ?? out;
-        if (stream)
+        if (stream) {
           sink.writeln('rask: ${node.package.name} — ${node.task.name}');
+        }
         final ctx = _RunContext(
           node,
           workspace,
@@ -183,8 +184,9 @@ class _RunContext implements TaskContext {
         workingDirectory: dir,
       );
       _sink.write(result.output);
-      if (result.output.isNotEmpty && !result.output.endsWith('\n'))
+      if (result.output.isNotEmpty && !result.output.endsWith('\n')) {
         _sink.writeln();
+      }
       code = result.exitCode;
     } else {
       code = await _runner.run(executable, args, workingDirectory: dir);

@@ -26,10 +26,12 @@ List<Package> selectPackages(Workspace ws, List<String> filters) {
       );
     }
     selected.add(name);
-    if (withDependents)
+    if (withDependents) {
       selected.addAll(ws.dependentsOf(name).map((pkg) => pkg.name));
-    if (withDependencies)
+    }
+    if (withDependencies) {
       selected.addAll(ws.dependenciesOf(name).map((pkg) => pkg.name));
+    }
   }
 
   return ws.inOrder.where((pkg) => selected.contains(pkg.name)).toList();

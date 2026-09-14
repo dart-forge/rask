@@ -16,8 +16,9 @@ class RecordingRunner implements ProcessRunner {
 
   int _code(String dir) {
     final name = p.basename(dir);
-    if (cannotStart.contains(name))
+    if (cannotStart.contains(name)) {
       throw ProcessException('dart', const [], 'not found', 2);
+    }
     return exitCodes[name] ?? 0;
   }
 
@@ -106,8 +107,9 @@ class ThrowingRunner implements ProcessRunner {
   }) async {
     final pkg = p.basename(workingDirectory);
     started.add(pkg);
-    if (pkg == throwFor)
+    if (pkg == throwFor) {
       throw ProcessException(executable, args, 'dart not found', 2);
+    }
     return 0;
   }
 
@@ -201,13 +203,14 @@ class FakeCompiler extends RecordingRunner {
     required String workingDirectory,
     Map<String, String>? environment,
   }) async {
-    if (failExec)
+    if (failExec) {
       throw ProcessException(
         'entrypoint.exe',
         const [],
         'Exec format error',
         8,
       );
+    }
     calls.add((executable, args, workingDirectory));
     environments.add(environment);
     return exitCodes[p.basename(executable)] ??

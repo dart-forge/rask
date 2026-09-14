@@ -112,8 +112,9 @@ class Launcher {
           );
         }
         err.write(result.output);
-        if (result.output.isNotEmpty && !result.output.endsWith('\n'))
+        if (result.output.isNotEmpty && !result.output.endsWith('\n')) {
           err.writeln();
+        }
         return exitUsage;
       }
       key = _keyFrom(root, depfile);
@@ -139,8 +140,9 @@ class Launcher {
 
   /// The recorded key when the compiled exe is still valid, else null.
   String? _currentKey(Directory root, File depfile, File keyFile, File exe) {
-    if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync())
+    if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync()) {
       return null;
+    }
     final key = _keyFrom(root, depfile);
     return keyFile.readAsStringSync() == key ? key : null;
   }
