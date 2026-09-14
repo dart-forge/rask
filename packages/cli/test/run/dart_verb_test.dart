@@ -87,7 +87,7 @@ void main() {
     final runner = RecordingRunner();
     final code = await runDartVerb(
       'analyze',
-      packages: ws.inOrder,
+      workspace: ws, packages: ws.inOrder,
       runner: runner,
       out: StringBuffer(),
     );
@@ -100,7 +100,7 @@ void main() {
 
   test('passes extra arguments through to dart', () async {
     final runner = RecordingRunner();
-    await runDartVerb('test', packages: [ws['tmp2']], runner: runner,
+    await runDartVerb('test', workspace: ws, packages: [ws['tmp2']], runner: runner,
         out: StringBuffer(), extraArgs: ['--reporter', 'expanded']);
     expect(runner.calls.single.$2, ['test', '--reporter', 'expanded']);
   });
@@ -108,7 +108,7 @@ void main() {
   test('`test` skips packages that have no test/ directory', () async {
     final runner = RecordingRunner();
     final out = StringBuffer();
-    await runDartVerb('test', packages: ws.inOrder, runner: runner, out: out);
+    await runDartVerb('test', workspace: ws, packages: ws.inOrder, runner: runner, out: out);
     expect(runner.calls.map((c) => p.basename(c.$3)), unorderedEquals(['tmp2', 'tmp1']));
     expect(out.toString(), contains('tmp3'));
     expect(out.toString(), contains('skip'));
@@ -125,13 +125,13 @@ void main() {
     File(p.join(ws['tmp2'].path, 'test', 'helper.dart')).writeAsStringSync('');
 
     final runner = RecordingRunner();
-    await runDartVerb('test', packages: ws.inOrder, runner: runner, out: StringBuffer());
+    await runDartVerb('test', workspace: ws, packages: ws.inOrder, runner: runner, out: StringBuffer());
     expect(runner.calls.map((c) => p.basename(c.$3)), ['tmp1']);
   });
 
   test('stops at the first failure and returns its exit code', () async {
     final runner = RecordingRunner(exitCodes: {'tmp2': 3});
-    final code = await runDartVerb('analyze', packages: ws.inOrder,
+    final code = await runDartVerb('analyze', workspace: ws, packages: ws.inOrder,
         runner: runner, out: StringBuffer());
     expect(code, 3);
     expect(runner.calls.map((c) => p.basename(c.$3)), ['tmp2']);
@@ -140,7 +140,7 @@ void main() {
   test('announces each package before running it', () async {
     final runner = RecordingRunner();
     final out = StringBuffer();
-    await runDartVerb('analyze', packages: [ws['tmp2']], runner: runner, out: out);
+    await runDartVerb('analyze', workspace: ws, packages: [ws['tmp2']], runner: runner, out: out);
     expect(out.toString(), contains('tmp2'));
     expect(out.toString(), contains('dart analyze'));
   });
@@ -159,7 +159,7 @@ void main() {
       final runner = RecordingRunner(exitCodes: exitCodes);
       final out = StringBuffer();
       final code = await runDartVerb('analyze',
-          packages: [ws['tmp2']], runner: runner, out: out, cache: newCache());
+          workspace: ws, packages: [ws['tmp2']], runner: runner, out: out, cache: newCache());
       return (code, runner, out.toString());
     }
 
@@ -190,7 +190,7 @@ void main() {
     test('changing a dependency runs the dependent again', () async {
       final runner = RecordingRunner();
       Future<int> both() => runDartVerb('analyze',
-          packages: [ws['tmp2'], ws['tmp1']], runner: runner, out: StringBuffer(), cache: newCache());
+          workspace: ws, packages: [ws['tmp2'], ws['tmp1']], runner: runner, out: StringBuffer(), cache: newCache());
       await both();
       expect(runner.calls, hasLength(2));
       File(p.join(ws['tmp2'].path, 'lib', 'x.dart')).writeAsStringSync('// changed');
@@ -205,7 +205,7 @@ void main() {
 
     test('independent packages of one stage run at once, up to --jobs', () async {
       final runner = GatedRunner();
-      final done = runDartVerb('analyze', packages: ws.inOrder, runner: runner,
+      final done = runDartVerb('analyze', workspace: ws, packages: ws.inOrder, runner: runner,
           out: StringBuffer(), jobs: 2);
       await pumpEventQueue();
       expect(runner.events.where((e) => e.startsWith('start')), hasLength(2));
@@ -220,7 +220,7 @@ void main() {
 
     test('a dependent starts only after its whole stage has finished', () async {
       final runner = GatedRunner();
-      final done = runDartVerb('analyze', packages: ws.inOrder, runner: runner,
+      final done = runDartVerb('analyze', workspace: ws, packages: ws.inOrder, runner: runner,
           out: StringBuffer(), jobs: 4);
       await pumpEventQueue();
       expect(runner.events, unorderedEquals(['start tmp2', 'start tmp3', 'start tmp4']));
@@ -238,7 +238,7 @@ void main() {
     test('after a failure nothing new starts, running packages finish, first failure code is returned', () async {
       final runner = GatedRunner();
       final out = StringBuffer();
-      final done = runDartVerb('analyze', packages: ws.inOrder, runner: runner,
+      final done = runDartVerb('analyze', workspace: ws, packages: ws.inOrder, runner: runner,
           out: out, jobs: 2);
       await pumpEventQueue();
       final started = runner.events.map((e) => e.substring('start '.length)).toList();
@@ -261,7 +261,7 @@ void main() {
     test('captured output is printed as one block per package', () async {
       final runner = RecordingRunner();
       final out = StringBuffer();
-      await runDartVerb('analyze', packages: [ws['tmp3'], ws['tmp4']], runner: runner,
+      await runDartVerb('analyze', workspace: ws, packages: [ws['tmp3'], ws['tmp4']], runner: runner,
           out: out, jobs: 2);
       expect(out.toString(), contains('rask: tmp3 — dart analyze\noutput of tmp3\n'));
       expect(out.toString(), contains('rask: tmp4 — dart analyze\noutput of tmp4\n'));
@@ -269,7 +269,7 @@ void main() {
 
     test('a stage with a single runner streams instead of capturing', () async {
       final runner = RecordingRunner();
-      await runDartVerb('analyze', packages: [ws['tmp2'], ws['tmp1']], runner: runner,
+      await runDartVerb('analyze', workspace: ws, packages: [ws['tmp2'], ws['tmp1']], runner: runner,
           out: StringBuffer(), jobs: 4);
       expect(runner.calls, hasLength(2));
       expect(runner.captured, isEmpty);
@@ -277,7 +277,7 @@ void main() {
 
     test('jobs: 1 always streams', () async {
       final runner = RecordingRunner();
-      await runDartVerb('analyze', packages: ws.inOrder, runner: runner,
+      await runDartVerb('analyze', workspace: ws, packages: ws.inOrder, runner: runner,
           out: StringBuffer(), jobs: 1);
       expect(runner.calls, hasLength(4));
       expect(runner.captured, isEmpty);
@@ -287,7 +287,7 @@ void main() {
       final runner = GatedRunner();
       final cacheDir = Directory(p.join(root.path, '.dart_tool', 'rask', 'cache'));
       final cache = TaskCache(workspace: ws, directory: cacheDir, sdkVersion: '3.13.0');
-      final done = runDartVerb('analyze', packages: [ws['tmp3'], ws['tmp4']], runner: runner,
+      final done = runDartVerb('analyze', workspace: ws, packages: [ws['tmp3'], ws['tmp4']], runner: runner,
           out: StringBuffer(), jobs: 2, cache: cache);
       await pumpEventQueue();
       runner.gate('tmp3').complete(1);
@@ -299,7 +299,7 @@ void main() {
 
     test('jobs below 1 is rejected', () {
       expect(
-        () => runDartVerb('analyze', packages: ws.inOrder, runner: RecordingRunner(),
+        () => runDartVerb('analyze', workspace: ws, packages: ws.inOrder, runner: RecordingRunner(),
             out: StringBuffer(), jobs: 0),
         throwsArgumentError,
       );

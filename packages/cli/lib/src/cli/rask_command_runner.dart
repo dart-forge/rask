@@ -129,6 +129,7 @@ class _DartVerbCommand extends Command<int> {
     return runDartVerb(
       name,
       packages: packages,
+      workspace: ws,
       runner: rask.processRunner,
       out: rask.out,
       extraArgs: argResults!.rest,

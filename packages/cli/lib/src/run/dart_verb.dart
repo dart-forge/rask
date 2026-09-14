@@ -28,6 +28,7 @@ import 'package:rask/src/workspace/workspace.dart';
 Future<int> runDartVerb(
   String verb, {
   required List<Package> packages,
+  required Workspace workspace,
   required ProcessRunner runner,
   required StringSink out,
   List<String> extraArgs = const [],
@@ -38,7 +39,7 @@ Future<int> runDartVerb(
   final command = ['dart', verb, ...extraArgs].join(' ');
   int? failure;
 
-  for (final stage in stagesOf(packages)) {
+  for (final stage in stagesOf(packages, workspace: workspace)) {
     // Skip decisions are made up front, in input order, so their lines come
     // out before any process output of the stage.
     final runners = <(Package, String?)>[];
