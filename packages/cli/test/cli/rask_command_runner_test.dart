@@ -2,33 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cli/rask_command_runner.dart';
-import 'package:rask/src/release/publish.dart';
-import 'package:rask/src/run/process_runner.dart';
+import 'package:rask/src/task/task.dart';
 import 'package:test/test.dart';
 
-class NoRegistry implements PackageRegistry {
-  @override
-  Future<bool> hasVersion({required String host, required String name, required String version}) async => false;
-}
-
-class RecordingRunner implements ProcessRunner {
-  final calls = <(String, List<String>, String)>[];
-  /// Working directories of the invocations that went through [runCaptured].
-  final captured = <String>[];
-  @override
-  Future<int> run(String executable, List<String> args,
-      {required String workingDirectory}) async {
-    calls.add((executable, args, workingDirectory));
-    return 0;
-  }
-
-  @override
-  Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async {
-    captured.add(workingDirectory);
-    return CapturedProcess(await run(executable, args, workingDirectory: workingDirectory), '');
-  }
-}
+import '../helpers/recording_runner.dart';
 
 void main() {
   late Directory root;
@@ -54,8 +31,14 @@ void main() {
   });
   tearDown(() => root.deleteSync(recursive: true));
 
-  Future<int> rask(List<String> args, {Directory? cwd}) =>
-      RaskCommandRunner(cwd: cwd ?? root, processRunner: runner, out: out, registry: NoRegistry()).run(args);
+  Future<int> rask(List<String> args, {Directory? cwd, RaskConfig config = const RaskConfig()}) =>
+      RaskCommandRunner(
+        cwd: cwd ?? root,
+        processRunner: runner,
+        out: out,
+        registry: NoRegistry(),
+        config: config,
+      ).run(args);
 
   List<String> dirs() => runner.calls.map((c) => p.basename(c.$3)).toList();
 
@@ -110,7 +93,7 @@ void main() {
       File(p.join(root.path, 'packages', 'tmp5', 'pubspec.yaml')).writeAsStringSync('name: tmp5\n');
       expect(await rask(['analyze', '-j', '2', '-F', 'tmp4', '-F', 'tmp5']), 0);
       expect(dirs(), unorderedEquals(['tmp4', 'tmp5']));
-      expect(runner.captured.map(p.basename), unorderedEquals(['tmp4', 'tmp5']));
+      expect(out.toString(), allOf(contains('out of tmp4'), contains('out of tmp5')));
     });
 
     test('--jobs 1 streams every package', () async {
@@ -118,7 +101,7 @@ void main() {
       File(p.join(root.path, 'packages', 'tmp5', 'pubspec.yaml')).writeAsStringSync('name: tmp5\n');
       expect(await rask(['analyze', '--jobs', '1', '-F', 'tmp4', '-F', 'tmp5']), 0);
       expect(dirs(), unorderedEquals(['tmp4', 'tmp5']));
-      expect(runner.captured, isEmpty);
+      expect(out.toString(), isNot(contains('out of')));
     });
 
     test('a non-positive or non-numeric value fails with exit 64', () async {
@@ -184,6 +167,42 @@ void main() {
     test('publish --dry-run passes --dry-run', () async {
       await rask(['publish', '--dry-run', '-F', 'tmp4']);
       expect(runner.calls.single.$2, ['pub', 'publish', '--dry-run']);
+    });
+  });
+
+  group('user tasks from a RaskConfig', () {
+    Future<void> noop(TaskContext _) async {}
+
+    test('each task becomes a command with -F and -- passthrough', () async {
+      final config = defineConfig(tasks: [
+        Task('codegen', run: (ctx) => ctx.dart(['run', 'build_runner', 'build', ...ctx.args])),
+      ]);
+      expect(await rask(['codegen', '-F', 'tmp4', '--', '--verbose'], config: config), 0);
+      expect(runner.calls.single.$2, ['run', 'build_runner', 'build', '--verbose']);
+      expect(p.basename(runner.calls.single.$3), 'tmp4');
+    });
+
+    test('dependsOn pulls in nodes outside the filter', () async {
+      final config = defineConfig(tasks: [
+        Task('codegen', run: noop),
+        Task('test', dependsOn: ['^codegen']),
+      ]);
+      await rask(['test', '-F', 'tmp1'], config: config);
+      // tmp1 -> tmp3 -> tmp4: codegen runs (noop, no process) in tmp3 and tmp4, then dart test in tmp1
+      expect(dirs(), ['tmp1']);
+      expect(out.toString(), allOf(contains('rask: tmp3 — codegen'), contains('rask: tmp4 — codegen')));
+    });
+
+    test('a broken config is exit 64 before any command runs', () async {
+      final config = defineConfig(tasks: [Task('pub', run: noop)]);
+      expect(await rask(['analyze'], config: config), 64);
+      expect(out.toString(), contains('pub'));
+      expect(runner.calls, isEmpty);
+    });
+
+    test('an unknown task is a usage error listing available commands', () async {
+      expect(await rask(['nope']), 64);
+      expect(out.toString(), contains('analyze'));
     });
   });
 }

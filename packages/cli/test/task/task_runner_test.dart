@@ -2,38 +2,13 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
-import 'package:rask/src/run/process_runner.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/task/task_runner.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:test/test.dart';
 
-class RecordingRunner implements ProcessRunner {
-  final calls = <(String, List<String>, String)>[];
-  final Map<String, int> exitCodes; // by package dir basename
-  final Set<String> cannotStart; // package dir basenames whose process fails to start
-  RecordingRunner({this.exitCodes = const {}, this.cannotStart = const {}});
-
-  int _code(String dir) {
-    final name = p.basename(dir);
-    if (cannotStart.contains(name)) throw ProcessException('dart', const [], 'not found', 2);
-    return exitCodes[name] ?? 0;
-  }
-
-  @override
-  Future<int> run(String executable, List<String> args, {required String workingDirectory}) async {
-    calls.add((executable, args, workingDirectory));
-    return _code(workingDirectory);
-  }
-
-  @override
-  Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async {
-    calls.add((executable, args, workingDirectory));
-    return CapturedProcess(_code(workingDirectory), 'out of ${p.basename(workingDirectory)}\n');
-  }
-}
+import '../helpers/recording_runner.dart';
 
 void main() {
   late Directory root;

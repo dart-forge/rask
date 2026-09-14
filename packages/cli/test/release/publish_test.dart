@@ -2,26 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rask/src/release/publish.dart';
-import 'package:rask/src/run/process_runner.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:test/test.dart';
 
-class RecordingRunner implements ProcessRunner {
-  final calls = <(String, List<String>, String)>[];
-  final Map<String, int> exitCodes;
-  RecordingRunner({this.exitCodes = const {}});
-  @override
-  Future<int> run(String executable, List<String> args,
-      {required String workingDirectory}) async {
-    calls.add((executable, args, workingDirectory));
-    return exitCodes[p.basename(workingDirectory)] ?? 0;
-  }
-
-  @override
-  Future<CapturedProcess> runCaptured(String executable, List<String> args,
-      {required String workingDirectory}) async =>
-      CapturedProcess(await run(executable, args, workingDirectory: workingDirectory), '');
-}
+import '../helpers/recording_runner.dart';
 
 class FakeRegistry implements PackageRegistry {
   /// host -> package -> published versions

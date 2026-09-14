@@ -46,43 +46,6 @@ class TaskCache {
   /// tree is read once no matter how many dependents include it.
   final Map<String, Map<String, String>> _trees = {};
 
-  // ---------------------------------------------------------------- v1 (dart verbs)
-
-  /// The cache key for running `dart <verb> <args>` in [package].
-  String keyFor(Package package, String verb, List<String> args) {
-    final root = workspace.root.path;
-    final manifest = StringBuffer()
-      ..writeln('rask-cache-v1')
-      ..writeln('sdk\t$sdkVersion')
-      ..writeln('verb\t$verb')
-      ..writeln('args\t${jsonEncode(args)}')
-      ..writeln('package\t${package.name}\t${p.relative(package.path, from: root)}')
-      ..writeln('root\tpubspec.yaml\t${_hashFile(p.join(root, 'pubspec.yaml'))}')
-      ..writeln('root\tpubspec.lock\t${_hashFile(p.join(root, 'pubspec.lock'))}');
-
-    final inputs = [package, ...workspace.dependenciesOf(package.name)]
-      ..sort((a, b) => a.path.compareTo(b.path));
-    for (final pkg in inputs) {
-      manifest.writeln('member\t${p.relative(pkg.path, from: root)}');
-      _writeTree(manifest, _tree(pkg.path));
-    }
-    return _sha(manifest.toString());
-  }
-
-  bool contains(String key) => _entry(key).existsSync();
-
-  /// Records that the task identified by [key] succeeded.
-  void store(String key, {required Package package, required String verb}) {
-    directory.createSync(recursive: true);
-    _entry(key).writeAsStringSync(jsonEncode({
-      'package': package.name,
-      'verb': verb,
-      'storedAt': DateTime.now().toUtc().toIso8601String(),
-    }));
-  }
-
-  // ---------------------------------------------------------------- v2 (tasks)
-
   /// The cache key for running [task] with [args] in [package].
   ///
   /// [inputs] narrows the package's own files (null = all); files matching
