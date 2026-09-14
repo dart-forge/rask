@@ -1,0 +1,94 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+import 'package:rask/src/launcher/config_key.dart';
+import 'package:rask/src/launcher/entrypoint_template.dart';
+import 'package:test/test.dart';
+
+void main() {
+  late Directory root;
+  void write(String rel, String content) {
+    final f = File(p.join(root.path, rel));
+    f.parent.createSync(recursive: true);
+    f.writeAsStringSync(content);
+  }
+
+  setUp(() {
+    root = Directory.systemTemp.createTempSync('rask_key_');
+    write('pubspec.lock', 'packages: {}\n');
+    write('rask.dart', "import 'package:rask/rask.dart';\nfinal config = defineConfig();\n");
+    write('rask/tasks.dart', 'const x = 1;');
+  });
+  tearDown(() => root.deleteSync(recursive: true));
+
+  group('entrypoint template', () {
+    test('imports package:rask/rask.dart and ../../rask.dart, forwards RASK_CONFIG_KEY', () {
+      expect(entrypointSource, contains("import 'package:rask/rask.dart';"));
+      expect(entrypointSource, contains("import '../../rask.dart' as user;"));
+      expect(entrypointSource, contains("Platform.environment['RASK_CONFIG_KEY']"));
+      expect(entrypointSource, contains('runRask(args, user.config'));
+      expect(entrypointTemplateVersion, 1);
+    });
+  });
+
+  group('localDepfileInputs', () {
+    test('keeps root-relative posix paths of files under root, sorted and unique', () {
+      final r = root.path;
+      final depfile = '$r/.dart_tool/rask/entrypoint.exe: $r/rask/tasks.dart $r/rask.dart '
+          '/opt/dart-sdk/lib/core/core.dart /home/me/.pub-cache/hosted/pub.dev/args-2.7.0/lib/args.dart '
+          '$r/.dart_tool/package_config.json $r/rask.dart\n';
+      expect(localDepfileInputs(depfile, root: r),
+          ['.dart_tool/package_config.json', 'rask.dart', 'rask/tasks.dart']);
+    });
+
+    test('handles backslash line continuations', () {
+      final r = root.path;
+      final depfile = '$r/.dart_tool/rask/entrypoint.exe: \\\n  $r/rask.dart \\\n  $r/rask/tasks.dart\n';
+      expect(localDepfileInputs(depfile, root: r), ['rask.dart', 'rask/tasks.dart']);
+    });
+
+    test('returns an empty list for an empty depfile', () {
+      expect(localDepfileInputs('', root: root.path), isEmpty);
+    });
+  });
+
+  group('computeConfigKey', () {
+    String key({List<String>? inputs, String sdk = '3.13.0', int template = 1}) => computeConfigKey(
+          root: root,
+          localInputs: inputs ?? ['rask.dart', 'rask/tasks.dart'],
+          sdkVersion: sdk,
+          templateVersion: template,
+        );
+
+    test('is stable', () => expect(key(), key()));
+    test('changes when rask.dart changes', () {
+      final before = key();
+      write('rask.dart', "import 'package:rask/rask.dart';\nfinal config = defineConfig(tasks: []);\n");
+      expect(key(), isNot(before));
+    });
+    test('changes when an imported local file changes', () {
+      final before = key();
+      write('rask/tasks.dart', 'const x = 2;');
+      expect(key(), isNot(before));
+    });
+    test('changes when pubspec.lock changes', () {
+      final before = key();
+      write('pubspec.lock', 'packages:\n  args: {version: 2.7.0}\n');
+      expect(key(), isNot(before));
+    });
+    test('changes with the SDK version and the template version', () {
+      expect(key(sdk: '3.14.0'), isNot(key()));
+      expect(key(template: 2), isNot(key()));
+    });
+    test('changes when a listed file disappears', () {
+      final before = key();
+      File(p.join(root.path, 'rask/tasks.dart')).deleteSync();
+      expect(key(), isNot(before));
+    });
+    test('does not depend on unrelated files', () {
+      final before = key();
+      write('README.md', 'x');
+      expect(key(), before);
+    });
+  });
+}
