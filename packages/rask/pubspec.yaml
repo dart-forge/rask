@@ -1,7 +1,7 @@
 name: rask
 description: Workspace-aware task runner for Dart — the library. Write tasks in rask.dart with package:rask/rask.dart; the command is package:rask_cli.
 version: 0.0.1
-repository: https://github.com/dosukoi-android/rask
+repository: https://github.com/dart-forge/rask
 resolution: workspace
 
 environment:
