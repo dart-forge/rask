@@ -8,7 +8,10 @@ import 'package:rask/src/workspace/workspace.dart';
 import 'package:test/test.dart';
 
 class RecordingRunner implements ProcessRunner {
+  /// Every invocation, streamed or captured: (executable, args, workingDirectory).
   final calls = <(String, List<String>, String)>[];
+  /// Working directories of the invocations that went through [runCaptured].
+  final captured = <String>[];
   final Map<String, int> exitCodes;
   RecordingRunner({this.exitCodes = const {}});
 
@@ -17,6 +20,14 @@ class RecordingRunner implements ProcessRunner {
       {required String workingDirectory}) async {
     calls.add((executable, args, workingDirectory));
     return exitCodes[p.basename(workingDirectory)] ?? 0;
+  }
+
+  @override
+  Future<CapturedProcess> runCaptured(String executable, List<String> args,
+      {required String workingDirectory}) async {
+    captured.add(workingDirectory);
+    final code = await run(executable, args, workingDirectory: workingDirectory);
+    return CapturedProcess(code, 'output of ${p.basename(workingDirectory)}\n');
   }
 }
 
