@@ -3,14 +3,14 @@
 Workspace-aware task runner for Dart. The verbs `dart` is missing.
 
 `dart` knows how to test, analyze and publish one package. rask runs those verbs
-across a whole pub workspace — dependencies first, with filters — from any
-directory inside it. No configuration file is needed: the dependency graph comes
-from `pubspec.yaml` alone.
+across a whole pub workspace — in parallel where packages are independent, with
+filters — from any directory inside it. No configuration file is needed: the
+dependency graph comes from `pubspec.yaml` alone.
 
 ## Usage
 
 ```sh
-rask test                       # dart test in every package, dependencies first
+rask test                       # dart test in every package (independent packages in parallel)
 rask analyze                    # dart analyze in every package
 rask pub get                    # dart pub get at the workspace root
 rask test -F my_pkg             # only my_pkg
@@ -25,7 +25,10 @@ rask publish --dry-run          # dart pub publish, dependencies first
 
 Every verb is a *task*: `test` and `analyze` are built in, and a `rask.dart`
 at the workspace root can add more or change theirs (`dependsOn`, `inputs`,
-`outputs`). Loading `rask.dart` is not wired up yet; the engine is.
+`outputs`). Loading `rask.dart` is not wired up yet; the engine is. Built-in
+`test` and `analyze` declare no `dependsOn`, so all selected packages run as
+one stage; add `Task('test', dependsOn: ['^test'])` in `rask.dart` to make
+them wait for their dependencies.
 
 Packages with no `*_test.dart` under `test/` are skipped by `rask test`.
 The first failing package stops the run and its exit code is returned.

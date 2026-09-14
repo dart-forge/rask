@@ -7,6 +7,9 @@
 - Cache keys moved to v2. The first run after upgrading re-runs everything;
   old entries under `.dart_tool/rask/cache` are not cleaned up and can be
   deleted at any time.
+- `test` and `analyze` no longer wait for dependency packages — all selected
+  packages run as one parallel stage (first failure still stops new starts).
+  `-F` selects exactly the named packages.
 
 ## 1.0.0
 
