@@ -49,11 +49,18 @@ into the top-level root, exactly as pub resolves them.
 ## Caching
 
 A package whose inputs have not changed since its last successful run is
-skipped. The inputs are the contents of every file in the package and in the
-workspace members it depends on (transitively), the root `pubspec.yaml` and
-`pubspec.lock`, the Dart SDK version, and the verb with its arguments.
-`.dart_tool/`, `build/` and `.git/` are ignored. Nothing is derived from git
-state or timestamps: a wrong skip is worse than a slow run.
+skipped. The key covers the task with its arguments, the task's `inputs`
+(default: every file in the package) minus its own `outputs`, every file of
+the workspace members it depends on (transitively), the keys of the tasks it
+`dependsOn`, the root `pubspec.yaml` and `pubspec.lock`, and the Dart SDK
+version. `.dart_tool/` and `build/` are ignored for `inputs`, but not for a
+task's own `outputs` — those are read wherever they are declared, including
+under `build/` or `.dart_tool/`; `.git/` is always ignored. Nothing is derived
+from git state or timestamps: a wrong skip is worse than a slow run.
+
+Even on a key hit, the `outputs` are re-hashed and compared against what they
+were when the run was recorded; a mismatch (a deleted or edited output) reruns
+the task rather than trusting a stale skip.
 
 Only successful runs are recorded, under `<root>/.dart_tool/rask/cache/`.
 Delete that directory to start over.
