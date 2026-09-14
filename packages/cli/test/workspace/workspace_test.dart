@@ -149,6 +149,33 @@ workspace:
     });
   });
 
+  group('a top-level root nested under another workspace (e.g. a git worktree)', () {
+    // <root>/.claude/worktrees/wt/ is its own workspace root: it has a
+    // `workspace:` section but NO `resolution: workspace`, so pub treats it
+    // as a top-level root, not as a member of <root>.
+    late Directory wt;
+    setUp(() {
+      wt = Directory(p.join(root.path, '.claude', 'worktrees', 'wt'));
+      writePubspec('.claude/worktrees/wt', 'name: _\nworkspace:\n  - packages/*\n');
+      writePubspec('.claude/worktrees/wt/packages/tmp1', 'name: tmp1\nresolution: workspace\n');
+    });
+
+    test('findRoot from inside the nested top-level root stops there', () {
+      final from = Directory(p.join(wt.path, 'packages', 'tmp1'));
+      expect(Workspace.findRoot(from)?.path, wt.path);
+    });
+
+    test('findRoot from the nested top-level root itself returns it', () {
+      expect(Workspace.findRoot(wt)?.path, wt.path);
+    });
+
+    test('a genuinely nested workspace (resolution: workspace) still resolves to the outer root', () {
+      writePubspec('.claude/worktrees/wt', 'name: _\nresolution: workspace\nworkspace:\n  - packages/*\n');
+      final from = Directory(p.join(wt.path, 'packages', 'tmp1'));
+      expect(Workspace.findRoot(from)?.path, root.path);
+    });
+  });
+
   test('a root without a workspace section is a single-package workspace', () {
     final single = Directory.systemTemp.createTempSync('rask_single_');
     addTearDown(() => single.deleteSync(recursive: true));

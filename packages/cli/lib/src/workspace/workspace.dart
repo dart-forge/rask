@@ -148,12 +148,15 @@ class Workspace {
     }
   }
 
-  /// Walks up from [from] to find the workspace root: the **topmost**
-  /// ancestor whose `pubspec.yaml` has a `workspace:` section (nested
-  /// workspaces resolve at the top, like pub does), or, failing that, the
-  /// nearest `pubspec.yaml` that is not itself a workspace member.
+  /// Walks up from [from] to find the workspace root, following pub's rule:
+  /// a `pubspec.yaml` with `resolution: workspace` says its root is somewhere
+  /// above; one without it is a root itself. So we climb while the pubspecs
+  /// we pass are members, and stop at the first `workspace:` root that is not
+  /// itself a member (nested workspaces have both keys and are climbed
+  /// through). A lone `pubspec.yaml` with neither key is a single-package
+  /// workspace. Returns null when there is no `pubspec.yaml` at all.
   static Directory? findRoot(Directory from) {
-    Directory? topmostWorkspace;
+    Directory? nearestWorkspace;
     Directory? standalone;
     var dir = Directory(p.normalize(p.absolute(from.path)));
     while (true) {
@@ -161,15 +164,17 @@ class Workspace {
       if (file.existsSync()) {
         final yaml = loadYaml(file.readAsStringSync());
         if (yaml is YamlMap) {
+          final isMember = yaml['resolution'] == 'workspace';
           if (yaml['workspace'] is YamlList) {
-            topmostWorkspace = dir;
-          } else if (yaml['resolution'] != 'workspace') {
+            nearestWorkspace = dir;
+            if (!isMember) return dir; // a top-level root: stop here
+          } else if (!isMember) {
             standalone ??= dir;
           }
         }
       }
       final parent = dir.parent;
-      if (parent.path == dir.path) return topmostWorkspace ?? standalone;
+      if (parent.path == dir.path) return nearestWorkspace ?? standalone;
       dir = parent;
     }
   }
