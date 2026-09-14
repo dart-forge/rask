@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -30,6 +31,53 @@ class RecordingRunner implements ProcessRunner {
     calls.add((executable, args, workingDirectory));
     return CapturedProcess(_code(workingDirectory), 'out of ${p.basename(workingDirectory)}\n');
   }
+}
+
+/// A runner whose processes finish only when the test completes their gate,
+/// so a test can observe what runs concurrently and what waits.
+class GatedRunner implements ProcessRunner {
+  /// `start <pkg>` and `end <pkg>` in the order they happened.
+  final events = <String>[];
+  final _gates = <String, Completer<int>>{};
+
+  /// Completing this with an exit code lets the package's fake process finish.
+  Completer<int> gate(String pkg) => _gates.putIfAbsent(pkg, Completer<int>.new);
+
+  @override
+  Future<int> run(String executable, List<String> args, {required String workingDirectory}) async {
+    final pkg = p.basename(workingDirectory);
+    events.add('start $pkg');
+    final code = await gate(pkg).future;
+    events.add('end $pkg');
+    return code;
+  }
+
+  @override
+  Future<CapturedProcess> runCaptured(String executable, List<String> args,
+      {required String workingDirectory}) async {
+    final code = await run(executable, args, workingDirectory: workingDirectory);
+    return CapturedProcess(code, 'output of ${p.basename(workingDirectory)}\n');
+  }
+}
+
+/// A runner whose process for [throwFor] cannot even be started.
+class ThrowingRunner implements ProcessRunner {
+  final String throwFor;
+  final started = <String>[];
+  ThrowingRunner({required this.throwFor});
+
+  @override
+  Future<int> run(String executable, List<String> args, {required String workingDirectory}) async {
+    final pkg = p.basename(workingDirectory);
+    started.add(pkg);
+    if (pkg == throwFor) throw ProcessException(executable, args, 'dart not found', 2);
+    return 0;
+  }
+
+  @override
+  Future<CapturedProcess> runCaptured(String executable, List<String> args,
+      {required String workingDirectory}) async =>
+      CapturedProcess(await run(executable, args, workingDirectory: workingDirectory), '');
 }
 
 /// A registry that has nothing published.

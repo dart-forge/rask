@@ -132,6 +132,7 @@ void main() {
     final (code, _, out) = await run(graph([], 'analyze', targets: [ws['lone']]), cannotStart: {'lone'});
     expect(code, 70);
     expect(out, contains('failed'));
+    expect(out, contains('not found')); // the ProcessException's own text (F2)
   });
 
   test('any other exception from run is exit 1 with the message', () async {
@@ -151,6 +152,105 @@ void main() {
 
   test('jobs must be at least 1', () {
     expect(() => run(graph([], 'analyze'), jobs: 0), throwsArgumentError);
+  });
+
+  group('concurrency and fail-fast (F2, ported from 218f12b:test/run/dart_verb_test.dart)', () {
+    // app -> lib ; lone and extra are independent.
+    // The builtin `analyze` has no dependsOn of its own, so its nodes would
+    // all land in a single stage regardless of package dependencies. Merge
+    // in dependsOn: ['^analyze'] (same pattern as the D-037 tests above) so
+    // app@analyze genuinely waits on lib@analyze's stage:
+    // stage 0: [lib, lone, extra] (3 independent nodes) ; stage 1: [app]
+    setUp(() {
+      write('packages/extra/pubspec.yaml', 'name: extra\n');
+      ws = Workspace.load(root);
+    });
+
+    TaskGraph analyzeGraph({List<Package>? targets}) =>
+        graph([Task('analyze', dependsOn: ['^analyze'])], 'analyze', targets: targets);
+
+    test('a stage runs at most --jobs packages at once', () async {
+      final runner = GatedRunner();
+      final done = runTaskGraph(analyzeGraph(),
+          workspace: ws, runner: runner, out: StringBuffer(), jobs: 2);
+      await pumpEventQueue();
+      expect(runner.events.where((e) => e.startsWith('start')), hasLength(2));
+      expect(runner.events, isNot(contains('start app'))); // depends on lib
+      for (final pkg in ['lib', 'lone', 'extra']) {
+        runner.gate(pkg).complete(0);
+      }
+      await pumpEventQueue(); // stage 1 (app) starts once stage 0 is done
+      runner.gate('app').complete(0);
+      expect(await done, 0);
+    });
+
+    test('a dependent waits for the whole stage', () async {
+      final runner = GatedRunner();
+      final done = runTaskGraph(analyzeGraph(),
+          workspace: ws, runner: runner, out: StringBuffer(), jobs: 4);
+      await pumpEventQueue();
+      expect(runner.events, unorderedEquals(['start lib', 'start lone', 'start extra']));
+      runner.gate('lib').complete(0);
+      await pumpEventQueue();
+      expect(runner.events, isNot(contains('start app'))); // lone/extra still running
+      runner.gate('lone').complete(0);
+      runner.gate('extra').complete(0);
+      await pumpEventQueue();
+      expect(runner.events, contains('start app'));
+      runner.gate('app').complete(0);
+      expect(await done, 0);
+    });
+
+    test(
+        'after a failure nothing new starts, running nodes finish, '
+        "and the first failure's exit code is returned", () async {
+      final runner = GatedRunner();
+      final out = StringBuffer();
+      final done = runTaskGraph(analyzeGraph(), workspace: ws, runner: runner, out: out, jobs: 2);
+      await pumpEventQueue();
+      final started = runner.events.map((e) => e.substring('start '.length)).toList();
+      expect(started, hasLength(2));
+      final (first, second) = (started[0], started[1]);
+      final third = ['lib', 'lone', 'extra'].where((x) => x != first && x != second).single;
+
+      runner.gate(first).complete(7);
+      await pumpEventQueue();
+      expect(runner.events, isNot(contains('start $third')));
+      expect(runner.events, isNot(contains('start app')));
+
+      runner.gate(second).complete(0);
+      expect(await done, 7);
+      expect(runner.events, contains('end $second'));
+      expect(out.toString(), contains('output of $second'));
+      expect(out.toString(), contains('$first — analyze failed (exit 7)'));
+    });
+
+    test('a success that finishes after another node failed is still recorded in the cache', () async {
+      final runner = GatedRunner();
+      final c = cache();
+      final done = runTaskGraph(analyzeGraph(targets: [ws['lone'], ws['extra']]),
+          workspace: ws, runner: runner, out: StringBuffer(), jobs: 2, cache: c);
+      await pumpEventQueue();
+      runner.gate('lone').complete(1);
+      runner.gate('extra').complete(0);
+      expect(await done, 1);
+
+      final again = await run(graph([], 'analyze', targets: [ws['lone'], ws['extra']]), c: c);
+      expect(dirs(again.$2), ['lone']); // extra's success was recorded; lone (failed) reruns
+      expect(again.$3, contains('rask: extra — analyze (cached, skip)'));
+    });
+
+    test('an exception from the runner (process cannot start) is reported with its text, exit 70',
+        () async {
+      final runner = ThrowingRunner(throwFor: 'lone');
+      final out = StringBuffer();
+      final code = await runTaskGraph(analyzeGraph(targets: [ws['lone']]),
+          workspace: ws, runner: runner, out: out, jobs: 1);
+      expect(code, 70);
+      expect(runner.started, ['lone']);
+      expect(out.toString(), contains('lone — analyze failed ('));
+      expect(out.toString(), contains('dart not found'));
+    });
   });
 
   group('with a cache', () {
