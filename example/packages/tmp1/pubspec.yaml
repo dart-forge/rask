@@ -1,0 +1,9 @@
+name: tmp1
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  tmp2:
+    path: ../tmp2
+  tmp3:
+    path: ../tmp3

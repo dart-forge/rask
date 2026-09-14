@@ -1,0 +1,7 @@
+name: tmp3
+resolution: workspace
+environment:
+  sdk: ^3.13.0
+dependencies:
+  tmp4:
+    path: ../tmp4
