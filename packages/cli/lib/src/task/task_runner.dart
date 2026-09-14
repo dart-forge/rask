@@ -22,6 +22,10 @@ const exitTaskError = 1;
 /// node starts, running nodes are awaited, and that failure's exit code is
 /// returned: the process's code for [ProcessFailure], 70 when a process
 /// could not start, 1 for any other exception (D-039).
+///
+/// [graph] with no nodes at all (no target package the task applies to)
+/// writes `rask: nothing to do for <taskName>` when [taskName] is given —
+/// the graph itself does not know the task's name when it has no nodes.
 Future<int> runTaskGraph(
   TaskGraph graph, {
   required Workspace workspace,
@@ -31,8 +35,13 @@ Future<int> runTaskGraph(
   TaskCache? cache,
   String configKey = '',
   int jobs = 1,
+  String? taskName,
 }) async {
   if (jobs < 1) throw ArgumentError.value(jobs, 'jobs', 'must be at least 1');
+  if (graph.nodes.isEmpty) {
+    if (taskName != null) out.writeln('rask: nothing to do for $taskName');
+    return 0;
+  }
   final keys = <TaskNode, String>{};
   int? failure;
 

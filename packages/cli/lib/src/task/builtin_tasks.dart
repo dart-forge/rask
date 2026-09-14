@@ -5,7 +5,11 @@ import 'package:rask/src/task/task.dart';
 import 'package:rask/src/workspace/workspace.dart';
 
 /// Verbs that are commands, not tasks. A task may not take these names.
-const Set<String> commandNames = {'pub', 'bump', 'publish'};
+///
+/// 'help' is not one of ours: args' `CommandRunner` pre-registers a hidden
+/// `help` command on construction, so a task named `help` would crash with
+/// `ArgumentError: Duplicate command "help"` instead of a clean ConfigError.
+const Set<String> commandNames = {'pub', 'bump', 'publish', 'help'};
 
 /// Whether [pkg] has at least one `*_test.dart` under `test/`. `dart test`
 /// exits 79 when it finds no tests, which would otherwise fail a run for a

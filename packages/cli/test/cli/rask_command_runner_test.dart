@@ -87,6 +87,16 @@ void main() {
     expect(out.toString(), contains('nope'));
   });
 
+  test('a task with nothing to apply to reports so and exits 0 (F4)', () async {
+    // remove every package's test/ dir so `test` (hasTests) applies nowhere
+    for (final pkg in ['tmp1', 'tmp3', 'tmp4']) {
+      Directory(p.join(root.path, 'packages', pkg, 'test')).deleteSync(recursive: true);
+    }
+    expect(await rask(['test']), 0);
+    expect(out.toString(), contains('rask: nothing to do for test'));
+    expect(runner.calls, isEmpty);
+  });
+
   group('--jobs', () {
     test('two independent packages run captured when -j allows it', () async {
       Directory(p.join(root.path, 'packages', 'tmp5')).createSync(recursive: true);

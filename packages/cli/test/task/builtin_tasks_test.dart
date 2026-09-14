@@ -86,6 +86,8 @@ void main() {
   });
 
   test('commandNames are the non-task verbs', () {
-    expect(commandNames, {'pub', 'bump', 'publish'});
+    // 'help' is CommandRunner's own pre-registered hidden command (F4):
+    // a task named 'help' throws ArgumentError: Duplicate command "help".
+    expect(commandNames, {'pub', 'bump', 'publish', 'help'});
   });
 }

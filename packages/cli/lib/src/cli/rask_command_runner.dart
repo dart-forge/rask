@@ -166,6 +166,7 @@ class _TaskCommand extends Command<int> {
       cache: cache,
       configKey: rask.configKey,
       jobs: jobs,
+      taskName: task.name,
     );
   }
 }

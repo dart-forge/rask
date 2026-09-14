@@ -51,7 +51,7 @@ void main() {
     });
 
     test('rejects a task named like a command', () {
-      for (final name in ['pub', 'bump', 'publish']) {
+      for (final name in ['pub', 'bump', 'publish', 'help']) {
         expect(() => resolveConfig(defineConfig(tasks: [Task(name, run: noop)])),
             throwsA(isA<ConfigError>().having((e) => e.message, 'message', contains(name))));
       }
@@ -75,6 +75,14 @@ void main() {
         expect(() => resolveConfig(defineConfig(tasks: [Task('a', run: noop, dependsOn: [bad])])),
             throwsA(isA<ConfigError>()), reason: 'entry: "$bad"');
       }
+    });
+
+    test('rejects an empty inputs list (F4)', () {
+      expect(
+        () => resolveConfig(defineConfig(tasks: [Task('a', run: noop, inputs: const [])])),
+        throwsA(isA<ConfigError>().having(
+            (e) => e.message, 'message', contains('inputs must be null (everything) or a non-empty list'))),
+      );
     });
 
     test('rejects an inputs entry under .dart_tool/, build/ or .git/ (F1)', () {

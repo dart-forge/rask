@@ -53,6 +53,10 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
   }
 
   for (final task in tasks.values) {
+    if (task.inputs != null && task.inputs!.isEmpty) {
+      throw ConfigError(
+          'Task "${task.name}": inputs must be null (everything) or a non-empty list.');
+    }
     for (final glob in task.inputs ?? const []) {
       final segment = glob.split('/').first;
       if (segment == '.dart_tool' || segment == 'build' || segment == '.git') {
