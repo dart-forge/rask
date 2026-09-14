@@ -1,16 +1,19 @@
-/// rask — workspace-aware task runner for Dart.
+/// rask — what a `rask.dart` needs.
+///
+/// ```dart
+/// import 'package:rask/rask.dart';
+///
+/// final config = defineConfig(tasks: [
+///   Task('codegen',
+///       where: (pkg) => pkg.dependsOn('build_runner'),
+///       run: (ctx) => ctx.dart(['run', 'build_runner', 'build'])),
+/// ]);
+/// ```
+///
+/// The engine behind it (graph, cache, CLI) is `package:rask/engine.dart`.
 library;
 
-export 'src/cache/task_cache.dart';
-export 'src/cli/rask_command_runner.dart';
 export 'src/cli/run_rask.dart';
-export 'src/release/bump.dart';
-export 'src/release/publish.dart';
-export 'src/task/builtin_tasks.dart';
+export 'src/task/builtin_tasks.dart' show hasTests;
 export 'src/task/task.dart';
-export 'src/task/task_graph.dart';
-export 'src/task/task_runner.dart';
-export 'src/workspace/filter.dart';
-export 'src/workspace/stages.dart';
-export 'src/workspace/topological_order.dart';
 export 'src/workspace/workspace.dart';
