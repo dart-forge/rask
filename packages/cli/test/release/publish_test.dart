@@ -16,6 +16,11 @@ class RecordingRunner implements ProcessRunner {
     calls.add((executable, args, workingDirectory));
     return exitCodes[p.basename(workingDirectory)] ?? 0;
   }
+
+  @override
+  Future<CapturedProcess> runCaptured(String executable, List<String> args,
+      {required String workingDirectory}) async =>
+      CapturedProcess(await run(executable, args, workingDirectory: workingDirectory), '');
 }
 
 class FakeRegistry implements PackageRegistry {

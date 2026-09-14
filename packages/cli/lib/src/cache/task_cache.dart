@@ -13,6 +13,8 @@ import 'package:rask/src/workspace/workspace.dart';
 /// on (transitively), the root `pubspec.yaml` and `pubspec.lock`, the Dart SDK
 /// version, and the verb with its arguments. It is never derived from git
 /// state or file timestamps — a wrong skip is worse than a slow run.
+///
+/// One instance is meant to live for one rask process; see [_manifests].
 class TaskCache {
   final Workspace workspace;
 
@@ -30,6 +32,14 @@ class TaskCache {
   /// Directory names that never influence a task's outcome.
   static const _ignoredDirs = {'.dart_tool', 'build', '.git'};
 
+  /// Directory manifests computed so far, by absolute package path.
+  ///
+  /// One [TaskCache] lives for one rask process, and nothing on disk is
+  /// expected to change underneath it, so a dependency's tree is read once
+  /// no matter how many dependents include it in their key. A new process
+  /// gets a new instance and reads everything again.
+  final Map<String, String> _manifests = {};
+
   /// The cache key for running `dart <verb> <args>` in [package].
   String keyFor(Package package, String verb, List<String> args) {
     final root = workspace.root.path;
@@ -46,7 +56,7 @@ class TaskCache {
       ..sort((a, b) => a.path.compareTo(b.path));
     for (final pkg in inputs) {
       manifest.writeln('member\t${p.relative(pkg.path, from: root)}');
-      _writeDirectoryManifest(pkg.path, manifest);
+      manifest.write(_directoryManifest(pkg.path));
     }
 
     return sha256.convert(utf8.encode(manifest.toString())).toString();
@@ -65,6 +75,15 @@ class TaskCache {
   }
 
   File _entry(String key) => File(p.join(directory.path, key));
+
+  /// The `file\t<relative path>\t<sha256>` lines for every regular file under
+  /// [dir], in sorted path order, skipping [_ignoredDirs]. Memoized per
+  /// instance (see [_manifests]).
+  String _directoryManifest(String dir) => _manifests.putIfAbsent(dir, () {
+        final manifest = StringBuffer();
+        _writeDirectoryManifest(dir, manifest);
+        return manifest.toString();
+      });
 
   /// Appends one `file\t<relative path>\t<sha256>` line per regular file under
   /// [dir], in sorted path order, skipping [_ignoredDirs].

@@ -18,12 +18,26 @@ rask test -F 'my_pkg...'        # my_pkg and everything that depends on it
 rask test -F '...my_pkg'        # my_pkg and everything it depends on
 rask test -- --reporter expanded   # arguments after -- go to dart test
 rask test --no-cache            # run everything, record nothing
+rask test -j 2                  # at most 2 packages at once (default: CPU cores)
 rask bump 0.2.0                 # lockstep version bump across the workspace
 rask publish --dry-run          # dart pub publish, dependencies first
 ```
 
 Packages with no `*_test.dart` under `test/` are skipped by `rask test`.
 The first failing package stops the run and its exit code is returned.
+
+Packages that do not depend on each other run in parallel, stage by stage:
+a package starts once every workspace member it depends on has finished. The
+output of packages that run together is captured and printed per package;
+a package that runs alone streams to the terminal. After a failure nothing
+new starts, running packages are awaited, and the first failure's exit code
+is returned.
+
+`-j` defaults to the number of CPU cores and multiplies with `dart test`'s own
+suite-level parallelism, so on CI pin a smaller value (`rask test -j 2`). Whether a
+package streams or is captured depends on how many packages in its stage are
+uncached, so the same package may print with colours in one run and plain in the
+next; the content is the same.
 
 Nested workspaces (a member with its own `workspace:` section) are flattened
 into the top-level root, exactly as pub resolves them.
