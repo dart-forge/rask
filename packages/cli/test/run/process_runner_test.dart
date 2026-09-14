@@ -19,8 +19,11 @@ void main() {
   exit(3);
 }
 ''');
-    final result = await const SystemProcessRunner()
-        .runCaptured(Platform.resolvedExecutable, [script.path], workingDirectory: dir.path);
+    final result = await const SystemProcessRunner().runCaptured(
+      Platform.resolvedExecutable,
+      [script.path],
+      workingDirectory: dir.path,
+    );
     expect(result.exitCode, 3);
     expect(result.output, contains('to stdout'));
     expect(result.output, contains('to stderr'));
@@ -30,12 +33,22 @@ void main() {
     final dir = Directory.systemTemp.createTempSync('rask_env_');
     addTearDown(() => dir.deleteSync(recursive: true));
     final script = File(p.join(dir.path, 'env.dart'))
-      ..writeAsStringSync("import 'dart:io';\nvoid main() => exit(Platform.environment['RASK_PROBE'] == 'yes' ? 0 : 3);\n");
+      ..writeAsStringSync(
+        "import 'dart:io';\nvoid main() => exit(Platform.environment['RASK_PROBE'] == 'yes' ? 0 : 3);\n",
+      );
     const runner = SystemProcessRunner();
     expect(
-      await runner.run('dart', [script.path], workingDirectory: dir.path, environment: {'RASK_PROBE': 'yes'}),
+      await runner.run(
+        'dart',
+        [script.path],
+        workingDirectory: dir.path,
+        environment: {'RASK_PROBE': 'yes'},
+      ),
       0,
     );
-    expect(await runner.run('dart', [script.path], workingDirectory: dir.path), 3);
+    expect(
+      await runner.run('dart', [script.path], workingDirectory: dir.path),
+      3,
+    );
   });
 }

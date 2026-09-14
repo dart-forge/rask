@@ -83,8 +83,10 @@ class RaskCommandRunner {
   Workspace _loadWorkspace() {
     final root = Workspace.findRoot(cwd);
     if (root == null) {
-      throw _RaskError('no pubspec.yaml found in ${cwd.path} or any parent '
-          'directory. Run rask inside a Dart package or workspace.');
+      throw _RaskError(
+        'no pubspec.yaml found in ${cwd.path} or any parent '
+        'directory. Run rask inside a Dart package or workspace.',
+      );
     }
     return Workspace.load(root);
   }
@@ -106,20 +108,23 @@ class _TaskCommand extends Command<int> {
       'filter',
       abbr: 'F',
       valueHelp: 'package',
-      help: 'Only run in the named package. `pkg...` adds its dependents, '
+      help:
+          'Only run in the named package. `pkg...` adds its dependents, '
           '`...pkg` adds its dependencies. Repeatable.',
     );
     argParser.addFlag(
       'cache',
       defaultsTo: true,
-      help: 'Skip packages whose inputs have not changed since their last '
+      help:
+          'Skip packages whose inputs have not changed since their last '
           'successful run. --no-cache runs everything and records nothing.',
     );
     argParser.addOption(
       'jobs',
       abbr: 'j',
       valueHelp: 'N',
-      help: 'Run up to N independent packages at once. Defaults to the number '
+      help:
+          'Run up to N independent packages at once. Defaults to the number '
           'of CPU cores. Note that `dart test` runs its own suites in parallel '
           'too, so pin a smaller N on CI.',
     );
@@ -129,7 +134,8 @@ class _TaskCommand extends Command<int> {
   String get name => task.name;
 
   @override
-  String get description => task.description ?? 'Run the "${task.name}" task from rask.dart.';
+  String get description =>
+      task.description ?? 'Run the "${task.name}" task from rask.dart.';
 
   @override
   String get invocation =>
@@ -142,18 +148,27 @@ class _TaskCommand extends Command<int> {
     final cache = argResults!.flag('cache')
         ? TaskCache(
             workspace: ws,
-            directory: Directory(p.join(ws.root.path, '.dart_tool', 'rask', 'cache')),
+            directory: Directory(
+              p.join(ws.root.path, '.dart_tool', 'rask', 'cache'),
+            ),
           )
         : null;
     final jobsArg = argResults!.option('jobs');
-    final jobs = jobsArg == null ? Platform.numberOfProcessors : int.tryParse(jobsArg);
+    final jobs = jobsArg == null
+        ? Platform.numberOfProcessors
+        : int.tryParse(jobsArg);
     if (jobs == null || jobs < 1) {
       throw _RaskError('--jobs must be a positive integer, got "$jobsArg"');
     }
 
     final TaskGraph graph;
     try {
-      graph = buildTaskGraph(config: resolved, task: task.name, targets: targets, workspace: ws);
+      graph = buildTaskGraph(
+        config: resolved,
+        task: task.name,
+        targets: targets,
+        workspace: ws,
+      );
     } on CyclicDependencyException catch (e) {
       throw _RaskError(e.toString());
     }
@@ -193,8 +208,10 @@ class _PubCommand extends Command<int> {
     final ws = rask._loadWorkspace();
     final args = argResults!.rest;
     rask.out.writeln('rask: ${ws.root.path} — dart pub ${args.join(' ')}');
-    return rask.processRunner
-        .run('dart', ['pub', ...args], workingDirectory: ws.root.path);
+    return rask.processRunner.run('dart', [
+      'pub',
+      ...args,
+    ], workingDirectory: ws.root.path);
   }
 }
 
@@ -221,8 +238,10 @@ class _BumpCommand extends Command<int> {
     }
     final version = rest.single;
     if (!isValidVersion(version)) {
-      throw _RaskError('"$version" is not a version. Expected x.y.z, '
-          'optionally with -pre-release and +build (no "v" prefix).');
+      throw _RaskError(
+        '"$version" is not a version. Expected x.y.z, '
+        'optionally with -pre-release and +build (no "v" prefix).',
+      );
     }
     final ws = rask._loadWorkspace();
     final changed = bumpWorkspace(ws, version, rask.out);
@@ -242,10 +261,17 @@ class _PublishCommand extends Command<int> {
   final RaskCommandRunner rask;
 
   _PublishCommand(this.rask) {
-    argParser.addMultiOption('filter', abbr: 'F', valueHelp: 'package',
-        help: 'Only publish the named package (`pkg...` / `...pkg` as for test).');
-    argParser.addFlag('dry-run', negatable: false,
-        help: 'Pass --dry-run to dart pub publish; never skips already-published versions.');
+    argParser.addMultiOption(
+      'filter',
+      abbr: 'F',
+      valueHelp: 'package',
+      help: 'Only publish the named package (`pkg...` / `...pkg` as for test).',
+    );
+    argParser.addFlag(
+      'dry-run',
+      negatable: false,
+      help: 'Pass --dry-run to dart pub publish; never skips already-published versions.',
+    );
   }
 
   @override

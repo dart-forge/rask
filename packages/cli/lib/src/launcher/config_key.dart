@@ -15,7 +15,9 @@ List<String> localDepfileInputs(String depfileContent, {required String root}) {
   // The first token is the target ("entrypoint.exe:"); drop it. Its own
   // content could itself contain a `\ ` escape, so this only works because
   // tokenization happens before, not via a textual `indexOf(':')` split.
-  final deps = tokens.isNotEmpty && tokens.first.endsWith(':') ? tokens.sublist(1) : tokens;
+  final deps = tokens.isNotEmpty && tokens.first.endsWith(':')
+      ? tokens.sublist(1)
+      : tokens;
   final result = <String>{};
   for (final dep in deps) {
     final abs = p.normalize(p.absolute(dep));
@@ -86,7 +88,9 @@ String computeConfigKey({
     ..writeln('rask-config-v1')
     ..writeln('sdk\t$sdkVersion')
     ..writeln('template\t$templateVersion')
-    ..writeln('file\tpubspec.lock\t${_hashFile(p.join(root.path, 'pubspec.lock'))}');
+    ..writeln(
+      'file\tpubspec.lock\t${_hashFile(p.join(root.path, 'pubspec.lock'))}',
+    );
   for (final rel in [...localInputs]..sort()) {
     manifest.writeln('file\t$rel\t${_hashFile(p.join(root.path, rel))}');
   }

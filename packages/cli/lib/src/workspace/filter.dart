@@ -20,12 +20,16 @@ List<Package> selectPackages(Workspace ws, List<String> filters) {
         .replaceFirst(RegExp(r'^\.\.\.'), '');
 
     if (!ws.packages.any((pkg) => pkg.name == name)) {
-      throw ArgumentError('"$name" is not a package in this workspace '
-          '(members: ${ws.packages.map((pkg) => pkg.name).join(', ')})');
+      throw ArgumentError(
+        '"$name" is not a package in this workspace '
+        '(members: ${ws.packages.map((pkg) => pkg.name).join(', ')})',
+      );
     }
     selected.add(name);
-    if (withDependents) selected.addAll(ws.dependentsOf(name).map((pkg) => pkg.name));
-    if (withDependencies) selected.addAll(ws.dependenciesOf(name).map((pkg) => pkg.name));
+    if (withDependents)
+      selected.addAll(ws.dependentsOf(name).map((pkg) => pkg.name));
+    if (withDependencies)
+      selected.addAll(ws.dependenciesOf(name).map((pkg) => pkg.name));
   }
 
   return ws.inOrder.where((pkg) => selected.contains(pkg.name)).toList();

@@ -23,6 +23,7 @@ void main() {
       f.parent.createSync(recursive: true);
       f.writeAsStringSync(content);
     }
+
     write('pubspec.yaml', '''
 name: it_root
 publish_to: none
@@ -34,7 +35,10 @@ dev_dependencies:
   rask:
     path: $cliDir
 ''');
-    write('packages/app/pubspec.yaml', 'name: app\nresolution: workspace\nenvironment:\n  sdk: ^3.13.0\n');
+    write(
+      'packages/app/pubspec.yaml',
+      'name: app\nresolution: workspace\nenvironment:\n  sdk: ^3.13.0\n',
+    );
     write('packages/app/lib/app.dart', 'int one() => 1;');
     write('rask.dart', '''
 import 'dart:io';
@@ -48,7 +52,10 @@ final config = defineConfig(tasks: [
   }),
 ]);
 ''');
-    final get = await Process.run('dart', ['pub', 'get'], workingDirectory: root.path);
+    final get = await Process.run('dart', [
+      'pub',
+      'get',
+    ], workingDirectory: root.path);
     expect(get.exitCode, 0, reason: get.stderr.toString());
   });
   tearDownAll(() => root.deleteSync(recursive: true));
@@ -56,11 +63,11 @@ final config = defineConfig(tasks: [
   test('compiles rask.dart once, runs the custom task, then hits the compile cache', () async {
     final err = StringBuffer();
     Launcher launcher() => Launcher(
-          cwd: root,
-          runner: const SystemProcessRunner(),
-          err: err,
-          environment: Platform.environment,
-        );
+      cwd: root,
+      runner: const SystemProcessRunner(),
+      err: err,
+      environment: Platform.environment,
+    );
 
     expect(await launcher().run(['hello', '-F', 'app']), 0);
     expect(err.toString(), contains('compiling rask.dart'));
@@ -79,12 +86,22 @@ final config = defineConfig(tasks: [
     expect(hello.existsSync(), isTrue);
   }, timeout: const Timeout(Duration(minutes: 3)));
 
-  test('a config without `config` fails with the convention hint and exit 64', () async {
-    File(p.join(root.path, 'rask.dart')).writeAsStringSync("import 'package:rask/rask.dart';\nfinal cfg = defineConfig();\n");
-    final err = StringBuffer();
-    final code = await Launcher(cwd: root, runner: const SystemProcessRunner(), err: err, environment: Platform.environment)
-        .run(['hello']);
-    expect(code, 64);
-    expect(err.toString(), contains('final config = defineConfig('));
-  }, timeout: const Timeout(Duration(minutes: 3)));
+  test(
+    'a config without `config` fails with the convention hint and exit 64',
+    () async {
+      File(p.join(root.path, 'rask.dart')).writeAsStringSync(
+        "import 'package:rask/rask.dart';\nfinal cfg = defineConfig();\n",
+      );
+      final err = StringBuffer();
+      final code = await Launcher(
+        cwd: root,
+        runner: const SystemProcessRunner(),
+        err: err,
+        environment: Platform.environment,
+      ).run(['hello']);
+      expect(code, 64);
+      expect(err.toString(), contains('final config = defineConfig('));
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
 }

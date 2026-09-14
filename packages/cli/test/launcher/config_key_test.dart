@@ -16,7 +16,10 @@ void main() {
   setUp(() {
     root = Directory.systemTemp.createTempSync('rask_key_');
     write('pubspec.lock', 'packages: {}\n');
-    write('rask.dart', "import 'package:rask/rask.dart';\nfinal config = defineConfig();\n");
+    write(
+      'rask.dart',
+      "import 'package:rask/rask.dart';\nfinal config = defineConfig();\n",
+    );
     write('rask/tasks.dart', 'const x = 1;');
   });
   tearDown(() => root.deleteSync(recursive: true));
@@ -25,7 +28,10 @@ void main() {
     test('imports package:rask/rask.dart and ../../rask.dart, forwards RASK_CONFIG_KEY', () {
       expect(entrypointSource, contains("import 'package:rask/rask.dart';"));
       expect(entrypointSource, contains("import '../../rask.dart' as user;"));
-      expect(entrypointSource, contains("Platform.environment['RASK_CONFIG_KEY']"));
+      expect(
+        entrypointSource,
+        contains("Platform.environment['RASK_CONFIG_KEY']"),
+      );
       expect(entrypointSource, contains('runRask(args, user.config'));
       expect(entrypointTemplateVersion, 1);
     });
@@ -34,17 +40,25 @@ void main() {
   group('localDepfileInputs', () {
     test('keeps root-relative posix paths of files under root, sorted and unique', () {
       final r = root.path;
-      final depfile = '$r/.dart_tool/rask/entrypoint.exe: $r/rask/tasks.dart $r/rask.dart '
+      final depfile =
+          '$r/.dart_tool/rask/entrypoint.exe: $r/rask/tasks.dart $r/rask.dart '
           '/opt/dart-sdk/lib/core/core.dart /home/me/.pub-cache/hosted/pub.dev/args-2.7.0/lib/args.dart '
           '$r/.dart_tool/package_config.json $r/rask.dart\n';
-      expect(localDepfileInputs(depfile, root: r),
-          ['.dart_tool/package_config.json', 'rask.dart', 'rask/tasks.dart']);
+      expect(localDepfileInputs(depfile, root: r), [
+        '.dart_tool/package_config.json',
+        'rask.dart',
+        'rask/tasks.dart',
+      ]);
     });
 
     test('handles backslash line continuations', () {
       final r = root.path;
-      final depfile = '$r/.dart_tool/rask/entrypoint.exe: \\\n  $r/rask.dart \\\n  $r/rask/tasks.dart\n';
-      expect(localDepfileInputs(depfile, root: r), ['rask.dart', 'rask/tasks.dart']);
+      final depfile =
+          '$r/.dart_tool/rask/entrypoint.exe: \\\n  $r/rask.dart \\\n  $r/rask/tasks.dart\n';
+      expect(localDepfileInputs(depfile, root: r), [
+        'rask.dart',
+        'rask/tasks.dart',
+      ]);
     });
 
     test('returns an empty list for an empty depfile', () {
@@ -54,7 +68,10 @@ void main() {
     test('unescapes backslash-space in paths', () {
       final r = root.path;
       final depfile = '$r/out.exe: $r/with\\ space/rask.dart $r/rask.dart\n';
-      expect(localDepfileInputs(depfile, root: r), ['rask.dart', 'with space/rask.dart']);
+      expect(localDepfileInputs(depfile, root: r), [
+        'rask.dart',
+        'with space/rask.dart',
+      ]);
     });
 
     test('a root path containing a space', () {
@@ -75,17 +92,24 @@ void main() {
   });
 
   group('computeConfigKey', () {
-    String key({List<String>? inputs, String sdk = '3.13.0', int template = 1}) => computeConfigKey(
-          root: root,
-          localInputs: inputs ?? ['rask.dart', 'rask/tasks.dart'],
-          sdkVersion: sdk,
-          templateVersion: template,
-        );
+    String key({
+      List<String>? inputs,
+      String sdk = '3.13.0',
+      int template = 1,
+    }) => computeConfigKey(
+      root: root,
+      localInputs: inputs ?? ['rask.dart', 'rask/tasks.dart'],
+      sdkVersion: sdk,
+      templateVersion: template,
+    );
 
     test('is stable', () => expect(key(), key()));
     test('changes when rask.dart changes', () {
       final before = key();
-      write('rask.dart', "import 'package:rask/rask.dart';\nfinal config = defineConfig(tasks: []);\n");
+      write(
+        'rask.dart',
+        "import 'package:rask/rask.dart';\nfinal config = defineConfig(tasks: []);\n",
+      );
       expect(key(), isNot(before));
     });
     test('changes when an imported local file changes', () {

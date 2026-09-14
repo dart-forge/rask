@@ -32,8 +32,11 @@ class HttpPackageRegistry implements PackageRegistry {
         throw HttpException('HTTP ${response.statusCode}', uri: uri);
       }
       final body = jsonDecode(await response.transform(utf8.decoder).join());
-      final versions = (body as Map<String, dynamic>)['versions'] as List<dynamic>;
-      return versions.any((v) => (v as Map<String, dynamic>)['version'] == version);
+      final versions =
+          (body as Map<String, dynamic>)['versions'] as List<dynamic>;
+      return versions.any(
+        (v) => (v as Map<String, dynamic>)['version'] == version,
+      );
     } finally {
       client.close(force: true);
     }
@@ -68,14 +71,19 @@ Future<int> publishPackages(
     final bool published;
     try {
       published = await registry.hasVersion(
-          host: pkg.publishHost, name: pkg.name, version: pkg.version!);
+        host: pkg.publishHost,
+        name: pkg.name,
+        version: pkg.version!,
+      );
     } catch (e) {
       out.writeln('rask: ${pkg.name} — could not reach ${pkg.publishHost}: $e');
       return exitRegistryUnavailable;
     }
     if (published) {
-      out.writeln('rask: ${pkg.name} ${pkg.version} — already published'
-          '${dryRun ? ' (dry run continues)' : ', skip'}');
+      out.writeln(
+        'rask: ${pkg.name} ${pkg.version} — already published'
+        '${dryRun ? ' (dry run continues)' : ', skip'}',
+      );
       if (!dryRun) continue;
     }
 

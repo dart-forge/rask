@@ -15,8 +15,12 @@ void main() {
       final d = Directory(p.join(root.path, rel))..createSync(recursive: true);
       File(p.join(d.path, 'pubspec.yaml')).writeAsStringSync(yaml);
     }
+
     put('.', 'name: _\nworkspace:\n  - packages/*\n');
-    put('packages/tmp1', 'name: tmp1\ndependencies:\n  tmp2: any\n  tmp3: any\n');
+    put(
+      'packages/tmp1',
+      'name: tmp1\ndependencies:\n  tmp2: any\n  tmp3: any\n',
+    );
     put('packages/tmp2', 'name: tmp2\n');
     put('packages/tmp3', 'name: tmp3\ndependencies:\n  tmp4: any\n');
     put('packages/tmp4', 'name: tmp4\n');
@@ -24,7 +28,8 @@ void main() {
   });
   tearDown(() => root.deleteSync(recursive: true));
 
-  List<String> names(Iterable<Package> pkgs) => pkgs.map((x) => x.name).toList();
+  List<String> names(Iterable<Package> pkgs) =>
+      pkgs.map((x) => x.name).toList();
 
   test('no filter selects every package in dependency order', () {
     final selected = names(selectPackages(ws, const []));
@@ -50,7 +55,15 @@ void main() {
   });
 
   test('unknown package name is an error', () {
-    expect(() => selectPackages(ws, ['nope']),
-        throwsA(isA<ArgumentError>().having((e) => e.message, 'message', contains('nope'))));
+    expect(
+      () => selectPackages(ws, ['nope']),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('nope'),
+        ),
+      ),
+    );
   });
 }

@@ -12,7 +12,10 @@ import 'package:rask/src/workspace/workspace.dart';
 /// `core` selected still runs `core` before `app`. Dependencies outside
 /// [packages] impose no wait of their own. Input order is preserved inside a
 /// stage.
-List<List<Package>> stagesOf(List<Package> packages, {required Workspace workspace}) {
+List<List<Package>> stagesOf(
+  List<Package> packages, {
+  required Workspace workspace,
+}) {
   final stageOf = <String, int>{};
   final stages = <List<Package>>[];
   for (final pkg in packages) {

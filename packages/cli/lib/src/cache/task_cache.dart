@@ -66,9 +66,15 @@ class TaskCache {
       ..writeln('sdk\t$sdkVersion')
       ..writeln('task\t$task')
       ..writeln('args\t${jsonEncode(args)}')
-      ..writeln('package\t${package.name}\t${p.relative(package.path, from: root)}')
-      ..writeln('root\tpubspec.yaml\t${_hashFile(p.join(root, 'pubspec.yaml'))}')
-      ..writeln('root\tpubspec.lock\t${_hashFile(p.join(root, 'pubspec.lock'))}')
+      ..writeln(
+        'package\t${package.name}\t${p.relative(package.path, from: root)}',
+      )
+      ..writeln(
+        'root\tpubspec.yaml\t${_hashFile(p.join(root, 'pubspec.yaml'))}',
+      )
+      ..writeln(
+        'root\tpubspec.lock\t${_hashFile(p.join(root, 'pubspec.lock'))}',
+      )
       ..writeln('config\t$configKey')
       ..writeln('inputs\t${inputs == null ? '*' : jsonEncode(inputs)}');
 
@@ -77,7 +83,8 @@ class TaskCache {
     final own = _tree(package.path);
     for (final entry in own.entries) {
       final path = entry.key;
-      if (inputGlobs != null && !inputGlobs.any((g) => g.matches(path))) continue;
+      if (inputGlobs != null && !inputGlobs.any((g) => g.matches(path)))
+        continue;
       if (outputGlobs.any((g) => g.matches(path))) continue;
       manifest.writeln('file\t$path\t${entry.value}');
     }
@@ -106,7 +113,10 @@ class TaskCache {
     if (outputs.isEmpty) return '';
     final globs = outputs.map(Glob.new).toList();
     final manifest = StringBuffer();
-    for (final entry in _readTree(package.path, ignore: const {'.git'}).entries) {
+    for (final entry in _readTree(
+      package.path,
+      ignore: const {'.git'},
+    ).entries) {
       if (globs.any((g) => g.matches(entry.key))) {
         manifest.writeln('file\t${entry.key}\t${entry.value}');
       }
@@ -116,10 +126,15 @@ class TaskCache {
 
   /// Whether [key] was recorded and the package's [outputs] still hash to
   /// what they did then.
-  bool isFresh(String key, {required Package package, required List<String> outputs}) {
+  bool isFresh(
+    String key, {
+    required Package package,
+    required List<String> outputs,
+  }) {
     final entry = _entry(key);
     if (!entry.existsSync()) return false;
-    final recorded = jsonDecode(entry.readAsStringSync()) as Map<String, dynamic>;
+    final recorded =
+        jsonDecode(entry.readAsStringSync()) as Map<String, dynamic>;
     return recorded['outputsHash'] == outputsHash(package, outputs);
   }
 
@@ -128,15 +143,21 @@ class TaskCache {
   void invalidate(Package package) => _trees.remove(package.path);
 
   /// Records that [task] succeeded in [package] with the current [outputs].
-  void storeTask(String key,
-      {required Package package, required String task, required List<String> outputs}) {
+  void storeTask(
+    String key, {
+    required Package package,
+    required String task,
+    required List<String> outputs,
+  }) {
     directory.createSync(recursive: true);
-    _entry(key).writeAsStringSync(jsonEncode({
-      'package': package.name,
-      'task': task,
-      'outputsHash': outputsHash(package, outputs),
-      'storedAt': DateTime.now().toUtc().toIso8601String(),
-    }));
+    _entry(key).writeAsStringSync(
+      jsonEncode({
+        'package': package.name,
+        'task': task,
+        'outputsHash': outputsHash(package, outputs),
+        'storedAt': DateTime.now().toUtc().toIso8601String(),
+      }),
+    );
   }
 
   // ---------------------------------------------------------------- internals
@@ -144,13 +165,17 @@ class TaskCache {
   File _entry(String key) => File(p.join(directory.path, key));
 
   /// The memoized tree of [dir]; see [_trees].
-  Map<String, String> _tree(String dir) => _trees.putIfAbsent(dir, () => _readTree(dir));
+  Map<String, String> _tree(String dir) =>
+      _trees.putIfAbsent(dir, () => _readTree(dir));
 
   /// Reads every regular file under [dir] (skipping [ignore], not following
   /// links) into relative-posix-path -> sha256, sorted by path. Defaults to
   /// [_ignoredDirs]; [outputsHash] passes a narrower set so it can see into
   /// `.dart_tool/` and `build/`.
-  static Map<String, String> _readTree(String dir, {Set<String> ignore = _ignoredDirs}) {
+  static Map<String, String> _readTree(
+    String dir, {
+    Set<String> ignore = _ignoredDirs,
+  }) {
     final files = <String>[];
     void walk(Directory d) {
       for (final entity in d.listSync(followLinks: false)) {
@@ -161,6 +186,7 @@ class TaskCache {
         }
       }
     }
+
     walk(Directory(dir));
     files.sort();
     return {

@@ -43,8 +43,8 @@ class Launcher {
     this.launcherVersion = raskVersion,
     this.dartExecutable = 'dart',
     Future<int> Function(List<String> args)? builtin,
-  })  : sdkVersion = sdkVersion ?? Platform.version,
-        builtin = builtin ?? ((args) => runRask(args, const RaskConfig()));
+  }) : sdkVersion = sdkVersion ?? Platform.version,
+       builtin = builtin ?? ((args) => runRask(args, const RaskConfig()));
 
   Future<int> run(List<String> args) async {
     final root = Workspace.findRoot(cwd);
@@ -53,27 +53,34 @@ class Launcher {
     if (!raskDart.existsSync()) return builtin(args);
     if (args.isNotEmpty && args.first == 'pub') return builtin(args); // D-050
 
-    if (!File(p.join(root.path, '.dart_tool', 'package_config.json')).existsSync()) {
-      err.writeln('rask: rask.dart needs resolved dependencies. Run `rask pub get` first.');
+    if (!File(p.join(root.path, '.dart_tool', 'package_config.json'))
+        .existsSync()) {
+      err.writeln(
+        'rask: rask.dart needs resolved dependencies. Run `rask pub get` first.',
+      );
       return exitUsage;
     }
     if (!_dependsOnRask(File(p.join(root.path, 'pubspec.yaml')))) {
       err
-        ..writeln('rask: rask.dart imports package:rask, but ${p.join(root.path, 'pubspec.yaml')} '
-            'does not depend on it. Add')
+        ..writeln(
+          'rask: rask.dart imports package:rask, but ${p.join(root.path, 'pubspec.yaml')} '
+          'does not depend on it. Add',
+        )
         ..writeln('  dev_dependencies:')
         ..writeln('    rask: ^$launcherVersion')
         ..writeln('and run `rask pub get`.');
       return exitUsage;
     }
 
-    final dir = Directory(p.join(root.path, '.dart_tool', 'rask'))..createSync(recursive: true);
+    final dir = Directory(p.join(root.path, '.dart_tool', 'rask'))
+      ..createSync(recursive: true);
     final entrypoint = File(p.join(dir.path, 'entrypoint.dart'));
     final exe = File(p.join(dir.path, 'entrypoint.exe'));
     final depfile = File(p.join(dir.path, 'entrypoint.d'));
     final keyFile = File(p.join(dir.path, 'entrypoint.key'));
 
-    if (!entrypoint.existsSync() || entrypoint.readAsStringSync() != entrypointSource) {
+    if (!entrypoint.existsSync() ||
+        entrypoint.readAsStringSync() != entrypointSource) {
       entrypoint.writeAsStringSync(entrypointSource);
     }
 
@@ -82,11 +89,15 @@ class Launcher {
       err.writeln('rask: compiling rask.dart …');
       final CapturedProcess result;
       try {
-        result = await runner.runCaptured(
-          dartExecutable,
-          ['compile', 'exe', entrypoint.path, '-o', exe.path, '--depfile', depfile.path],
-          workingDirectory: root.path,
-        );
+        result = await runner.runCaptured(dartExecutable, [
+          'compile',
+          'exe',
+          entrypoint.path,
+          '-o',
+          exe.path,
+          '--depfile',
+          depfile.path,
+        ], workingDirectory: root.path);
       } on ProcessException catch (e) {
         err.writeln('rask: could not run ${e.executable}: ${e.message}');
         return exitCannotRun;
@@ -94,11 +105,15 @@ class Launcher {
       if (result.exitCode != 0) {
         // The two shapes the front end reports a missing `config` with:
         // `Undefined name 'config'.` and `Getter not found: 'config'.`
-        if (RegExp(r"(Undefined name|Getter not found:) 'config'").hasMatch(result.output)) {
-          err.writeln('rask: rask.dart must define `final config = defineConfig(...)`.');
+        if (RegExp(r"(Undefined name|Getter not found:) 'config'")
+            .hasMatch(result.output)) {
+          err.writeln(
+            'rask: rask.dart must define `final config = defineConfig(...)`.',
+          );
         }
         err.write(result.output);
-        if (result.output.isNotEmpty && !result.output.endsWith('\n')) err.writeln();
+        if (result.output.isNotEmpty && !result.output.endsWith('\n'))
+          err.writeln();
         return exitUsage;
       }
       key = _keyFrom(root, depfile);
@@ -106,11 +121,16 @@ class Launcher {
     }
 
     try {
-      return await runner.run(exe.path, args, workingDirectory: cwd.path, environment: {
-        ...environment,
-        'RASK_CONFIG_KEY': key,
-        'RASK_LAUNCHER_VERSION': launcherVersion,
-      });
+      return await runner.run(
+        exe.path,
+        args,
+        workingDirectory: cwd.path,
+        environment: {
+          ...environment,
+          'RASK_CONFIG_KEY': key,
+          'RASK_LAUNCHER_VERSION': launcherVersion,
+        },
+      );
     } on ProcessException catch (e) {
       err.writeln('rask: could not run ${e.executable}: ${e.message}');
       return exitCannotRun;
@@ -119,7 +139,8 @@ class Launcher {
 
   /// The recorded key when the compiled exe is still valid, else null.
   String? _currentKey(Directory root, File depfile, File keyFile, File exe) {
-    if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync()) return null;
+    if (!depfile.existsSync() || !keyFile.existsSync() || !exe.existsSync())
+      return null;
     final key = _keyFrom(root, depfile);
     return keyFile.readAsStringSync() == key ? key : null;
   }
@@ -127,10 +148,13 @@ class Launcher {
   /// The config key from the depfile's inputs plus [sdkVersion] — computed
   /// after a fresh compile and again to check whether a cached exe is stale.
   String _keyFrom(Directory root, File depfile) => computeConfigKey(
-        root: root,
-        localInputs: localDepfileInputs(depfile.readAsStringSync(), root: root.path),
-        sdkVersion: sdkVersion,
-      );
+    root: root,
+    localInputs: localDepfileInputs(
+      depfile.readAsStringSync(),
+      root: root.path,
+    ),
+    sdkVersion: sdkVersion,
+  );
 
   static bool _dependsOnRask(File pubspec) {
     if (!pubspec.existsSync()) return false;

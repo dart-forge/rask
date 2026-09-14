@@ -23,11 +23,20 @@ void main() {
   setUp(() {
     builtinCalls.clear();
     root = Directory.systemTemp.createTempSync('rask_launcher_');
-    write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\ndev_dependencies:\n  rask: any\n');
+    write(
+      'pubspec.yaml',
+      'name: _\nworkspace:\n  - packages/*\ndev_dependencies:\n  rask: any\n',
+    );
     write('pubspec.lock', 'packages: {}\n');
-    write('.dart_tool/package_config.json', '{"configVersion":2,"packages":[]}');
+    write(
+      '.dart_tool/package_config.json',
+      '{"configVersion":2,"packages":[]}',
+    );
     write('packages/app/pubspec.yaml', 'name: app\nresolution: workspace\n');
-    write('rask.dart', "import 'package:rask/rask.dart';\nfinal config = defineConfig();\n");
+    write(
+      'rask.dart',
+      "import 'package:rask/rask.dart';\nfinal config = defineConfig();\n",
+    );
     write('rask/tasks.dart', 'const x = 1;');
     runner = FakeCompiler(root: root.path);
     err = StringBuffer();
@@ -35,27 +44,31 @@ void main() {
   tearDown(() => root.deleteSync(recursive: true));
 
   Launcher launcher({Directory? cwd, FakeCompiler? r}) => Launcher(
-        cwd: cwd ?? root,
-        runner: r ?? runner,
-        err: err,
-        environment: {'HOME': '/h'},
-        sdkVersion: '3.13.0',
-        launcherVersion: '9.9.9',
-        builtin: (args) async {
-          builtinCalls.add(args);
-          return 0;
-        },
-      );
+    cwd: cwd ?? root,
+    runner: r ?? runner,
+    err: err,
+    environment: {'HOME': '/h'},
+    sdkVersion: '3.13.0',
+    launcherVersion: '9.9.9',
+    builtin: (args) async {
+      builtinCalls.add(args);
+      return 0;
+    },
+  );
 
   String exe() => p.join(root.path, '.dart_tool', 'rask', 'entrypoint.exe');
-  File entrypoint() => File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.dart'));
-  File keyFile() => File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.key'));
+  File entrypoint() =>
+      File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.dart'));
+  File keyFile() =>
+      File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.key'));
 
   group('falls back to the builtin config', () {
     test('when there is no rask.dart', () async {
       File(p.join(root.path, 'rask.dart')).deleteSync();
       expect(await launcher().run(['test', '-F', 'app']), 0);
-      expect(builtinCalls, [['test', '-F', 'app']]);
+      expect(builtinCalls, [
+        ['test', '-F', 'app'],
+      ]);
       expect(runner.calls, isEmpty);
     });
 
@@ -63,33 +76,54 @@ void main() {
       final lonely = Directory.systemTemp.createTempSync('rask_lonely_');
       addTearDown(() => lonely.deleteSync(recursive: true));
       await launcher(cwd: lonely).run(['analyze']);
-      expect(builtinCalls, [['analyze']]);
+      expect(builtinCalls, [
+        ['analyze'],
+      ]);
     });
 
     test('for `pub`, even with a rask.dart (D-050)', () async {
       await launcher().run(['pub', 'get', '--offline']);
-      expect(builtinCalls, [['pub', 'get', '--offline']]);
+      expect(builtinCalls, [
+        ['pub', 'get', '--offline'],
+      ]);
       expect(runner.compiles, 0);
     });
   });
 
   group('preconditions', () {
-    test('missing package_config.json → 64 and a hint to run rask pub get', () async {
-      File(p.join(root.path, '.dart_tool', 'package_config.json')).deleteSync();
-      expect(await launcher().run(['test']), 64);
-      expect(err.toString(), contains('rask pub get'));
-      expect(runner.compiles, 0);
-    });
+    test(
+      'missing package_config.json → 64 and a hint to run rask pub get',
+      () async {
+        File(p.join(root.path, '.dart_tool', 'package_config.json'))
+            .deleteSync();
+        expect(await launcher().run(['test']), 64);
+        expect(err.toString(), contains('rask pub get'));
+        expect(runner.compiles, 0);
+      },
+    );
 
-    test('root pubspec without a rask dependency → 64 and how to add it', () async {
-      write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\n');
-      expect(await launcher().run(['test']), 64);
-      expect(err.toString(), allOf(contains('package:rask'), contains('dev_dependencies'), contains('9.9.9')));
-      expect(runner.compiles, 0);
-    });
+    test(
+      'root pubspec without a rask dependency → 64 and how to add it',
+      () async {
+        write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\n');
+        expect(await launcher().run(['test']), 64);
+        expect(
+          err.toString(),
+          allOf(
+            contains('package:rask'),
+            contains('dev_dependencies'),
+            contains('9.9.9'),
+          ),
+        );
+        expect(runner.compiles, 0);
+      },
+    );
 
     test('a rask dependency under dependencies is accepted too', () async {
-      write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\ndependencies:\n  rask: any\n');
+      write(
+        'pubspec.yaml',
+        'name: _\nworkspace:\n  - packages/*\ndependencies:\n  rask: any\n',
+      );
       expect(await launcher().run(['test']), 0);
       expect(runner.compiles, 1);
     });
@@ -111,8 +145,10 @@ void main() {
       final expectedKey = computeConfigKey(
         root: root,
         localInputs: localDepfileInputs(
-            File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.d')).readAsStringSync(),
-            root: root.path),
+          File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.d'))
+              .readAsStringSync(),
+          root: root.path,
+        ),
         sdkVersion: '3.13.0',
       );
       expect(keyFile().readAsStringSync(), expectedKey);
@@ -151,15 +187,30 @@ void main() {
       await launcher().run(['test']);
       final err2 = StringBuffer();
       final r2 = FakeCompiler(root: root.path);
-      await Launcher(cwd: root, runner: r2, err: err2, sdkVersion: '3.13.0', builtin: (_) async => 0).run(['test']);
+      await Launcher(
+        cwd: root,
+        runner: r2,
+        err: err2,
+        sdkVersion: '3.13.0',
+        builtin: (_) async => 0,
+      ).run(['test']);
       expect(r2.compiles, 0);
       expect(r2.calls.single.$1, exe());
       expect(err2.toString(), isNot(contains('compiling')));
     });
 
     for (final (what, change) in <(String, void Function())>[
-      ('rask.dart', () => write('rask.dart', "import 'package:rask/rask.dart';\nfinal config = defineConfig(tasks: []);\n")),
-      ('an imported local file', () => write('rask/tasks.dart', 'const x = 2;')),
+      (
+        'rask.dart',
+        () => write(
+          'rask.dart',
+          "import 'package:rask/rask.dart';\nfinal config = defineConfig(tasks: []);\n",
+        ),
+      ),
+      (
+        'an imported local file',
+        () => write('rask/tasks.dart', 'const x = 2;'),
+      ),
       ('pubspec.lock', () => write('pubspec.lock', 'packages:\n  x: {}\n')),
     ]) {
       test('recompiles when $what changes', () async {
@@ -179,18 +230,28 @@ void main() {
       expect(r2.compiles, 1);
     });
 
-    test('recompiles when the depfile is missing but the key file and exe exist', () async {
-      await launcher().run(['test']);
-      File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.d')).deleteSync();
-      final r2 = FakeCompiler(root: root.path);
-      await launcher(r: r2).run(['test']);
-      expect(r2.compiles, 1);
-    });
+    test(
+      'recompiles when the depfile is missing but the key file and exe exist',
+      () async {
+        await launcher().run(['test']);
+        File(p.join(root.path, '.dart_tool', 'rask', 'entrypoint.d'))
+            .deleteSync();
+        final r2 = FakeCompiler(root: root.path);
+        await launcher(r: r2).run(['test']);
+        expect(r2.compiles, 1);
+      },
+    );
 
     test('recompiles when the SDK version changes', () async {
       await launcher().run(['test']);
       final r2 = FakeCompiler(root: root.path);
-      await Launcher(cwd: root, runner: r2, err: err, sdkVersion: '3.14.0', builtin: (_) async => 0).run(['test']);
+      await Launcher(
+        cwd: root,
+        runner: r2,
+        err: err,
+        sdkVersion: '3.14.0',
+        builtin: (_) async => 0,
+      ).run(['test']);
       expect(r2.compiles, 1);
     });
 
@@ -204,15 +265,23 @@ void main() {
 
   group('compile failure', () {
     test('prints the compiler output and exits 64', () async {
-      final r = FakeCompiler(root: root.path, compileExitCode: 254, compileOutput: 'rask.dart:2:7: Error: boom\n');
+      final r = FakeCompiler(
+        root: root.path,
+        compileExitCode: 254,
+        compileOutput: 'rask.dart:2:7: Error: boom\n',
+      );
       expect(await launcher(r: r).run(['test']), 64);
       expect(err.toString(), contains('Error: boom'));
       expect(r.calls.where((c) => c.$1 == exe()), isEmpty);
     });
 
     test('explains the config convention when config is undefined', () async {
-      final r = FakeCompiler(root: root.path, compileExitCode: 254,
-          compileOutput: "entrypoint.dart:8:10: Error: Undefined name 'config'.\n");
+      final r = FakeCompiler(
+        root: root.path,
+        compileExitCode: 254,
+        compileOutput:
+            "entrypoint.dart:8:10: Error: Undefined name 'config'.\n",
+      );
       await launcher(r: r).run(['test']);
       expect(err.toString(), contains('final config = defineConfig('));
     });
@@ -228,7 +297,10 @@ void main() {
     test('an exe that cannot be started is reported and exits 70', () async {
       final r = FakeCompiler(root: root.path, failExec: true);
       expect(await launcher(r: r).run(['test']), 70);
-      expect(err.toString(), allOf(contains('entrypoint.exe'), contains('Exec format error')));
+      expect(
+        err.toString(),
+        allOf(contains('entrypoint.exe'), contains('Exec format error')),
+      );
     });
   });
 }

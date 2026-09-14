@@ -27,13 +27,26 @@ void main() {
 
   test('throws on a cycle naming the packages involved', () {
     expect(
-      () => topologicalOrder({'a': {'b'}, 'b': {'a'}}),
-      throwsA(isA<CyclicDependencyException>()
-          .having((e) => e.cycle, 'cycle', containsAll(['a', 'b']))),
+      () => topologicalOrder({
+        'a': {'b'},
+        'b': {'a'},
+      }),
+      throwsA(
+        isA<CyclicDependencyException>().having(
+          (e) => e.cycle,
+          'cycle',
+          containsAll(['a', 'b']),
+        ),
+      ),
     );
   });
 
   test('ignores edges to packages outside the graph', () {
-    expect(topologicalOrder({'a': {'external'}}), ['a']);
+    expect(
+      topologicalOrder({
+        'a': {'external'},
+      }),
+      ['a'],
+    );
   });
 }

@@ -53,7 +53,7 @@ class Workspace {
   final Map<String, Package> _byName;
 
   Workspace._(this.root, this.packages)
-      : _byName = {for (final pkg in packages) pkg.name: pkg};
+    : _byName = {for (final pkg in packages) pkg.name: pkg};
 
   Package operator [](String name) {
     final pkg = _byName[name];
@@ -65,8 +65,8 @@ class Workspace {
 
   /// Members ordered so that every package comes after its dependencies.
   List<Package> get inOrder => topologicalOrder({
-        for (final pkg in packages) pkg.name: pkg.dependencies.toSet(),
-      }).map((name) => _byName[name]!).toList();
+    for (final pkg in packages) pkg.name: pkg.dependencies.toSet(),
+  }).map((name) => _byName[name]!).toList();
 
   /// Members that depend on [name], directly or transitively.
   Iterable<Package> dependentsOf(String name) {
@@ -94,6 +94,7 @@ class Workspace {
         if (result.add(dep)) visit(dep);
       }
     }
+
     visit(name);
     return result.map((n) => _byName[n]!);
   }
@@ -127,18 +128,22 @@ class Workspace {
   /// Adds every member listed under `workspace:` in [pubspec] (which lives in
   /// [dir]) to [into], recursing into members that are workspaces themselves.
   static void _collectMembers(
-      String dir, YamlMap pubspec, Map<String, YamlMap> into) {
+    String dir,
+    YamlMap pubspec,
+    Map<String, YamlMap> into,
+  ) {
     final patterns = pubspec['workspace'];
     if (patterns is! YamlList) return;
 
     for (final pattern in patterns.cast<String>()) {
-      final matches = Glob(pattern)
-          .listSync(root: dir)
-          .whereType<Directory>()
-          .map((d) => p.normalize(p.absolute(d.path)))
-          .where((m) => File(p.join(m, 'pubspec.yaml')).existsSync())
-          .toList()
-        ..sort();
+      final matches =
+          Glob(pattern)
+              .listSync(root: dir)
+              .whereType<Directory>()
+              .map((d) => p.normalize(p.absolute(d.path)))
+              .where((m) => File(p.join(m, 'pubspec.yaml')).existsSync())
+              .toList()
+            ..sort();
       for (final member in matches) {
         if (into.containsKey(member)) continue;
         final memberPubspec = _readPubspec(member);
@@ -188,7 +193,11 @@ class Workspace {
     return yaml;
   }
 
-  static Package _readPackage(String dir, YamlMap pubspec, Set<String> members) {
+  static Package _readPackage(
+    String dir,
+    YamlMap pubspec,
+    Set<String> members,
+  ) {
     final deps = <String>[];
     for (final section in const ['dependencies', 'dev_dependencies']) {
       final map = pubspec[section];
