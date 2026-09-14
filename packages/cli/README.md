@@ -33,8 +33,9 @@ them wait for their dependencies.
 Packages with no `*_test.dart` under `test/` are skipped by `rask test`.
 The first failing package stops the run and its exit code is returned.
 
-Packages that do not depend on each other run in parallel, stage by stage:
-a package starts once every workspace member it depends on has finished. The
+Tasks run in parallel, stage by stage: a node (task × package) starts once
+every node it `dependsOn` has finished, and nodes without such edges — the
+built-in `test` and `analyze` among them — share one stage. The
 output of packages that run together is captured and printed per package;
 a package that runs alone streams to the terminal. After a failure nothing
 new starts, running packages are awaited, and the first failure's exit code
