@@ -147,4 +147,91 @@ void main() {
       expect(dir.existsSync(), isTrue);
     });
   });
+
+  group('v2: keyForTask / outputsHash / isFresh / storeTask', () {
+    String key({
+      List<String>? inputs,
+      List<String> outputs = const [],
+      List<String> dependsOnKeys = const [],
+      String configKey = '',
+      List<String> args = const [],
+      String task = 'codegen',
+    }) =>
+        cache().keyForTask(
+          package: ws['tmp1'],
+          task: task,
+          args: args,
+          inputs: inputs,
+          outputs: outputs,
+          dependsOnKeys: dependsOnKeys,
+          configKey: configKey,
+        );
+
+    test('differs from the v1 key for the same verb and args', () {
+      expect(key(task: 'test'), isNot(cache().keyFor(ws['tmp1'], 'test', const [])));
+    });
+
+    test('changes with task, args, configKey and dependsOn keys', () {
+      final base = key();
+      expect(key(task: 'other'), isNot(base));
+      expect(key(args: ['-v']), isNot(base));
+      expect(key(configKey: 'abc'), isNot(base));
+      expect(key(dependsOnKeys: ['k1']), isNot(base));
+      expect(key(dependsOnKeys: ['k1', 'k2']), key(dependsOnKeys: ['k2', 'k1'])); // order-free
+    });
+
+    test('inputs narrow the package files that matter', () {
+      write('packages/tmp1/README.md', 'a');
+      final before = key(inputs: ['lib/**']);
+      write('packages/tmp1/README.md', 'b');
+      expect(key(inputs: ['lib/**']), before); // README is not an input
+      write('packages/tmp1/lib/a.dart', 'int a = 9;');
+      expect(key(inputs: ['lib/**']), isNot(before));
+    });
+
+    test('inputs do not narrow dependency packages', () {
+      final before = key(inputs: ['lib/**']);
+      write('packages/tmp4/README.md', 'changed'); // tmp1 -> tmp3 -> tmp4
+      expect(key(inputs: ['lib/**']), isNot(before));
+    });
+
+    test('the task\'s own outputs are excluded from its inputs', () {
+      write('packages/tmp1/lib/a.g.dart', '// gen 1');
+      final before = key(outputs: ['lib/**.g.dart']);
+      write('packages/tmp1/lib/a.g.dart', '// gen 2');
+      expect(key(outputs: ['lib/**.g.dart']), before);
+      // but without declaring outputs the generated file counts
+      final k1 = key();
+      write('packages/tmp1/lib/a.g.dart', '// gen 3');
+      expect(key(), isNot(k1));
+    });
+
+    test('outputsHash is empty without outputs and tracks matching files', () {
+      expect(cache().outputsHash(ws['tmp1'], const []), '');
+      final none = cache().outputsHash(ws['tmp1'], ['lib/**.g.dart']);
+      write('packages/tmp1/lib/a.g.dart', '// gen');
+      final one = cache().outputsHash(ws['tmp1'], ['lib/**.g.dart']);
+      expect(one, isNot(none));
+      write('packages/tmp1/lib/a.g.dart', '// gen changed');
+      expect(cache().outputsHash(ws['tmp1'], ['lib/**.g.dart']), isNot(one));
+    });
+
+    test('isFresh is false until stored, true after, and false again when outputs change', () {
+      write('packages/tmp1/lib/a.g.dart', '// gen');
+      const outputs = ['lib/**.g.dart'];
+      final k = key(outputs: outputs);
+      expect(cache().isFresh(k, package: ws['tmp1'], outputs: outputs), isFalse);
+      cache().storeTask(k, package: ws['tmp1'], task: 'codegen', outputs: outputs);
+      expect(cache().isFresh(k, package: ws['tmp1'], outputs: outputs), isTrue);
+      File(p.join(root.path, 'packages/tmp1/lib/a.g.dart')).deleteSync(); // fresh clone
+      expect(cache().isFresh(k, package: ws['tmp1'], outputs: outputs), isFalse);
+    });
+
+    test('storeTask records task and outputsHash in the entry', () {
+      final k = key();
+      cache().storeTask(k, package: ws['tmp1'], task: 'codegen', outputs: const []);
+      final entry = File(p.join(root.path, '.dart_tool', 'rask', 'cache', k)).readAsStringSync();
+      expect(entry, allOf(contains('"task":"codegen"'), contains('"outputsHash":""')));
+    });
+  });
 }
