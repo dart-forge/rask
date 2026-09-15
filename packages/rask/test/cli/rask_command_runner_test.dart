@@ -303,7 +303,17 @@ void main() {
       expect(exists('.dart_tool/rask/gen/tmp1_gen/pubspec.yaml'), isTrue);
       expect(exists('pubspec_overrides.yaml'), isTrue);
       expect(runner.calls.first.$2, ['pub', 'get']);
-      expect(out.toString(), contains('tmp1_gen: any'));
+      expect(
+        out.toString(),
+        allOf(
+          contains('tmp1_gen: any'),
+          contains(p.join('packages', 'tmp1', 'pubspec.yaml')),
+          contains(
+            'no clone can resolve dependencies until rask has generated '
+            'tmp1_gen',
+          ),
+        ),
+      );
 
       // Second run: nothing changed, so no pub get and no hint.
       runner.calls.clear();
