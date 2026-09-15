@@ -135,7 +135,6 @@ Future<int> runTaskGraph(
           sink: sink,
           capture: !stream,
           gen: genLib,
-          label: node.task.name,
         );
         int? code;
         try {

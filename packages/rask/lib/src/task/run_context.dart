@@ -17,7 +17,6 @@ class RunContext implements TargetContext {
     required this.capture,
     this.gen,
     this.port,
-    this.label,
   });
 
   @override
@@ -34,9 +33,6 @@ class RunContext implements TargetContext {
   final ProcessRunner runner;
   final StringSink sink;
   final bool capture;
-
-  /// What [log] names after the package: a task's name, or a target's.
-  final String? label;
 
   @override
   Future<void> dart(List<String> args) => exec('dart', args);
