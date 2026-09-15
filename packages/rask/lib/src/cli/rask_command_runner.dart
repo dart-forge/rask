@@ -172,9 +172,7 @@ class _TaskCommand extends Command<int> {
       }
       if (ensured.pubGetExitCode != 0) return ensured.pubGetExitCode;
       for (final name in ensured.created) {
-        final producer = generated
-            .firstWhere((g) => g.name == name)
-            .producer;
+        final producer = generated.firstWhere((g) => g.name == name).producer;
         final pubspec = p.join(
           p.relative(producer.path, from: ws.root.path),
           'pubspec.yaml',

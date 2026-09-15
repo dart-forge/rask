@@ -54,7 +54,8 @@ Future<int> runTaskGraph(
     (genByProducer[g.producer.name] ??= []).add(g);
   }
   List<GeneratedPackage> producedBy(TaskNode node) => [
-    for (final g in genByProducer[node.package.name] ?? const <GeneratedPackage>[])
+    for (final g
+        in genByProducer[node.package.name] ?? const <GeneratedPackage>[])
       if (g.taskName == node.task.name) g,
   ];
   List<String> outputDirsOf(TaskNode node) => [
@@ -63,7 +64,8 @@ Future<int> runTaskGraph(
   List<String> inputDirsOf(TaskNode node) {
     final own = outputDirsOf(node).toSet();
     final dirs = <String>[];
-    for (final g in genByProducer[node.package.name] ?? const <GeneratedPackage>[]) {
+    for (final g
+        in genByProducer[node.package.name] ?? const <GeneratedPackage>[]) {
       if (!own.contains(g.dir)) dirs.add(g.dir);
     }
     for (final dep in workspace.dependenciesOf(node.package.name)) {

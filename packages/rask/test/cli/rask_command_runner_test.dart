@@ -299,7 +299,10 @@ void main() {
     bool exists(String rel) => File(p.join(root.path, rel)).existsSync();
 
     test('creates them, runs pub get first, and hints once', () async {
-      expect(await rask(['codegen'], config: defineConfig(tasks: [codegen()])), 0);
+      expect(
+        await rask(['codegen'], config: defineConfig(tasks: [codegen()])),
+        0,
+      );
       expect(exists('.dart_tool/rask/gen/tmp1_gen/pubspec.yaml'), isTrue);
       expect(exists('pubspec_overrides.yaml'), isTrue);
       expect(runner.calls.first.$2, ['pub', 'get']);
@@ -318,7 +321,10 @@ void main() {
       // Second run: nothing changed, so no pub get and no hint.
       runner.calls.clear();
       out.clear();
-      expect(await rask(['codegen'], config: defineConfig(tasks: [codegen()])), 0);
+      expect(
+        await rask(['codegen'], config: defineConfig(tasks: [codegen()])),
+        0,
+      );
       expect(runner.calls.where((c) => c.$2.contains('get')), isEmpty);
       expect(out.toString(), isNot(contains('tmp1_gen: any')));
     });
@@ -353,16 +359,18 @@ void main() {
       expect(out.toString(), contains('Bad-Name'));
     });
 
-    test('a task without generates never touches pubspec_overrides.yaml', () async {
-      expect(
-        await rask(
-          ['plain'],
-          config: defineConfig(tasks: [Task('plain', run: (ctx) async {})]),
-        ),
-        0,
-      );
-      expect(exists('pubspec_overrides.yaml'), isFalse);
-      expect(runner.calls.where((c) => c.$2.contains('get')), isEmpty);
-    });
+    test(
+      'a task without generates never touches pubspec_overrides.yaml',
+      () async {
+        expect(
+          await rask([
+            'plain',
+          ], config: defineConfig(tasks: [Task('plain', run: (ctx) async {})])),
+          0,
+        );
+        expect(exists('pubspec_overrides.yaml'), isFalse);
+        expect(runner.calls.where((c) => c.$2.contains('get')), isEmpty);
+      },
+    );
   });
 }

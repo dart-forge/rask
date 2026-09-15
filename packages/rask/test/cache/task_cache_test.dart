@@ -285,21 +285,24 @@ void main() {
       expect(key(), isNot(before));
     });
 
-    test('inputDirs are part of the key, so the same task without them differs', () {
-      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
-      final withDir = cache().keyForTask(
-        package: ws['tmp1'],
-        task: 'test',
-        args: const [],
-        inputDirs: [genDir('tmp1_gen')],
-      );
-      final without = cache().keyForTask(
-        package: ws['tmp1'],
-        task: 'test',
-        args: const [],
-      );
-      expect(withDir, isNot(without));
-    });
+    test(
+      'inputDirs are part of the key, so the same task without them differs',
+      () {
+        writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
+        final withDir = cache().keyForTask(
+          package: ws['tmp1'],
+          task: 'test',
+          args: const [],
+          inputDirs: [genDir('tmp1_gen')],
+        );
+        final without = cache().keyForTask(
+          package: ws['tmp1'],
+          task: 'test',
+          args: const [],
+        );
+        expect(withDir, isNot(without));
+      },
+    );
 
     test('a generating task is not invalidated by its own output', () {
       writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');

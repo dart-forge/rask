@@ -64,28 +64,34 @@ void main() {
     expect(exists('.gitignore'), isFalse);
   });
 
-  test('writes the stub, the override, the gitignore line, then pub get', () async {
-    final result = await ensure(declared());
-    expect(result.changed, isTrue);
-    expect(result.created, ['app_gen']);
-    expect(result.pubGetExitCode, 0);
+  test(
+    'writes the stub, the override, the gitignore line, then pub get',
+    () async {
+      final result = await ensure(declared());
+      expect(result.changed, isTrue);
+      expect(result.created, ['app_gen']);
+      expect(result.pubGetExitCode, 0);
 
-    final stub = read('.dart_tool/rask/gen/app_gen/pubspec.yaml');
-    expect(stub, contains('name: app_gen'));
-    expect(stub, contains('publish_to: none'));
-    expect(stub, contains('sdk: ^3.13.0'));
-    expect(stub, isNot(contains('resolution: workspace')));
-    expect(stub, isNot(contains('dependencies:')));
-    expect(exists('.dart_tool/rask/gen/app_gen/lib'), isTrue);
+      final stub = read('.dart_tool/rask/gen/app_gen/pubspec.yaml');
+      expect(stub, contains('name: app_gen'));
+      expect(stub, contains('publish_to: none'));
+      expect(stub, contains('sdk: ^3.13.0'));
+      expect(stub, isNot(contains('resolution: workspace')));
+      expect(stub, isNot(contains('dependencies:')));
+      expect(exists('.dart_tool/rask/gen/app_gen/lib'), isTrue);
 
-    expect(read('pubspec_overrides.yaml'), contains('.dart_tool/rask/gen/app_gen'));
-    expect(read('.gitignore'), contains('pubspec_overrides.yaml'));
+      expect(
+        read('pubspec_overrides.yaml'),
+        contains('.dart_tool/rask/gen/app_gen'),
+      );
+      expect(read('.gitignore'), contains('pubspec_overrides.yaml'));
 
-    expect(runner.calls, hasLength(1));
-    expect(runner.calls.single.$1, 'dart');
-    expect(runner.calls.single.$2, ['pub', 'get']);
-    expect(runner.calls.single.$3, root.path);
-  });
+      expect(runner.calls, hasLength(1));
+      expect(runner.calls.single.$1, 'dart');
+      expect(runner.calls.single.$2, ['pub', 'get']);
+      expect(runner.calls.single.$3, root.path);
+    },
+  );
 
   test('a second call with the same declaration changes nothing', () async {
     await ensure(declared());
@@ -96,21 +102,22 @@ void main() {
     expect(runner.calls, isEmpty);
   });
 
-  test('removes the directory and the override of a package no longer declared', () async {
-    await ensure(declared(['app_gen', 'old_gen']));
-    runner.calls.clear();
-    final result = await ensure(declared(['app_gen']));
-    expect(result.changed, isTrue);
-    expect(exists('.dart_tool/rask/gen/old_gen'), isFalse);
-    expect(read('pubspec_overrides.yaml'), isNot(contains('old_gen')));
-    expect(runner.calls, hasLength(1));
-  });
+  test(
+    'removes the directory and the override of a package no longer declared',
+    () async {
+      await ensure(declared(['app_gen', 'old_gen']));
+      runner.calls.clear();
+      final result = await ensure(declared(['app_gen']));
+      expect(result.changed, isTrue);
+      expect(exists('.dart_tool/rask/gen/old_gen'), isFalse);
+      expect(read('pubspec_overrides.yaml'), isNot(contains('old_gen')));
+      expect(runner.calls, hasLength(1));
+    },
+  );
 
   test('reports the pub get exit code', () async {
     // RecordingRunner looks exit codes up by the working directory's basename.
-    final failing = RecordingRunner(
-      exitCodes: {p.basename(root.path): 69},
-    );
+    final failing = RecordingRunner(exitCodes: {p.basename(root.path): 69});
     final result = await ensureGeneratedPackages(
       workspace: ws,
       generated: declared(),
@@ -137,15 +144,18 @@ void main() {
     expect(read('.gitignore'), 'pubspec_overrides.*\n');
   });
 
-  test('falls back to the running SDK when the root declares no constraint', () async {
-    write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\n');
-    ws = Workspace.load(root);
-    await ensure(declared());
-    expect(
-      read('.dart_tool/rask/gen/app_gen/pubspec.yaml'),
-      contains(RegExp(r'sdk: \^\d+\.\d+\.\d+')),
-    );
-  });
+  test(
+    'falls back to the running SDK when the root declares no constraint',
+    () async {
+      write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\n');
+      ws = Workspace.load(root);
+      await ensure(declared());
+      expect(
+        read('.dart_tool/rask/gen/app_gen/pubspec.yaml'),
+        contains(RegExp(r'sdk: \^\d+\.\d+\.\d+')),
+      );
+    },
+  );
 
   test('a foreign override of a generated name is a ConfigError', () async {
     write(

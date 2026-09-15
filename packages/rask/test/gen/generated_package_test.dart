@@ -20,7 +20,10 @@ void main() {
   setUp(() {
     root = Directory.systemTemp.createTempSync('rask_gen_');
     write('pubspec.yaml', 'name: _\nworkspace:\n  - packages/*\n');
-    write('packages/app/pubspec.yaml', 'name: app\ndependencies:\n  my_orm: any\n');
+    write(
+      'packages/app/pubspec.yaml',
+      'name: app\ndependencies:\n  my_orm: any\n',
+    );
     write('packages/plain/pubspec.yaml', 'name: plain\n');
     ws = Workspace.load(root);
   });
@@ -40,7 +43,9 @@ void main() {
   );
 
   test('no task with generates yields nothing', () {
-    final resolved = resolveConfig(defineConfig(tasks: [Task('x', run: (_) async {})]));
+    final resolved = resolveConfig(
+      defineConfig(tasks: [Task('x', run: (_) async {})]),
+    );
     expect(resolveGeneratedPackages(resolved, ws), isEmpty);
   });
 
@@ -49,7 +54,10 @@ void main() {
     expect(generated.map((g) => g.name), ['app_gen', 'plain_gen']);
     expect(generated.first.producer.name, 'app');
     expect(generated.first.taskName, 'codegen');
-    expect(generated.first.dir, p.join(root.path, '.dart_tool', 'rask', 'gen', 'app_gen'));
+    expect(
+      generated.first.dir,
+      p.join(root.path, '.dart_tool', 'rask', 'gen', 'app_gen'),
+    );
     expect(generated.first.libDir, p.join(generated.first.dir, 'lib'));
     expect(generated.first.overridePath, '.dart_tool/rask/gen/app_gen');
   });
@@ -80,7 +88,10 @@ void main() {
 
   test('rejects two packages generating the same name', () {
     expect(
-      () => resolveGeneratedPackages(configWith(codegen(generates: (pkg) => 'shared_gen')), ws),
+      () => resolveGeneratedPackages(
+        configWith(codegen(generates: (pkg) => 'shared_gen')),
+        ws,
+      ),
       throwsA(
         isA<ConfigError>().having(
           (e) => e.message,
@@ -93,7 +104,10 @@ void main() {
 
   test('rejects a name that collides with a workspace member', () {
     expect(
-      () => resolveGeneratedPackages(configWith(codegen(generates: (pkg) => 'plain')), ws),
+      () => resolveGeneratedPackages(
+        configWith(codegen(generates: (pkg) => 'plain')),
+        ws,
+      ),
       throwsA(
         isA<ConfigError>().having(
           (e) => e.message,

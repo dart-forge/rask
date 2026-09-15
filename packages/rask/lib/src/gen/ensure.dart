@@ -99,15 +99,8 @@ Future<EnsureResult> ensureGeneratedPackages({
 
   if (!changed) return EnsureResult.unchanged;
   out.writeln('rask: generated packages changed — dart pub get');
-  final code = await runner.run('dart', [
-    'pub',
-    'get',
-  ], workingDirectory: root);
-  return EnsureResult(
-    changed: true,
-    created: created,
-    pubGetExitCode: code,
-  );
+  final code = await runner.run('dart', ['pub', 'get'], workingDirectory: root);
+  return EnsureResult(changed: true, created: created, pubGetExitCode: code);
 }
 
 String _stub(String name, String sdk) =>

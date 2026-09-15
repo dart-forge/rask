@@ -568,34 +568,38 @@ void main() {
       dir: p.join(root.path, '.dart_tool', 'rask', 'gen', name),
     );
 
-    test('ctx.gen is the generated lib directory, emptied before the run', () async {
-      final gen = genFor('app', 'app_gen');
-      final stale = File(p.join(gen.libDir, 'stale.dart'))
-        ..parent.createSync(recursive: true)
-        ..writeAsStringSync('int stale = 1;');
+    test(
+      'ctx.gen is the generated lib directory, emptied before the run',
+      () async {
+        final gen = genFor('app', 'app_gen');
+        final stale = File(p.join(gen.libDir, 'stale.dart'))
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync('int stale = 1;');
 
-      String? seen;
-      final task = Task(
-        'codegen',
-        where: (pkg) => pkg.name == 'app',
-        generates: (pkg) => 'app_gen',
-        run: (ctx) async {
-          seen = ctx.gen;
-          File(p.join(ctx.gen!, 'fresh.dart')).writeAsStringSync('int fresh = 1;');
-        },
-      );
-      final code = await runTaskGraph(
-        graph([task], 'codegen'),
-        workspace: ws,
-        runner: RecordingRunner(),
-        out: StringBuffer(),
-        generated: [gen],
-      );
-      expect(code, 0);
-      expect(seen, gen.libDir);
-      expect(stale.existsSync(), isFalse);
-      expect(File(p.join(gen.libDir, 'fresh.dart')).existsSync(), isTrue);
-    });
+        String? seen;
+        final task = Task(
+          'codegen',
+          where: (pkg) => pkg.name == 'app',
+          generates: (pkg) => 'app_gen',
+          run: (ctx) async {
+            seen = ctx.gen;
+            File(p.join(ctx.gen!, 'fresh.dart'))
+                .writeAsStringSync('int fresh = 1;');
+          },
+        );
+        final code = await runTaskGraph(
+          graph([task], 'codegen'),
+          workspace: ws,
+          runner: RecordingRunner(),
+          out: StringBuffer(),
+          generated: [gen],
+        );
+        expect(code, 0);
+        expect(seen, gen.libDir);
+        expect(stale.existsSync(), isFalse);
+        expect(File(p.join(gen.libDir, 'fresh.dart')).existsSync(), isTrue);
+      },
+    );
 
     test('ctx.gen is null for a task that generates nothing', () async {
       String? seen = 'not null';
@@ -622,7 +626,8 @@ void main() {
         generates: (pkg) => 'app_gen',
         run: (ctx) async {
           runs++;
-          File(p.join(ctx.gen!, 'out.dart')).writeAsStringSync('int out = $runs;');
+          File(p.join(ctx.gen!, 'out.dart'))
+              .writeAsStringSync('int out = $runs;');
         },
       );
       for (var i = 0; i < 2; i++) {
@@ -643,36 +648,39 @@ void main() {
       );
     });
 
-    test('the dependents of a generating package see its output in their key', () async {
-      final gen = genFor('lib', 'lib_gen');
-      Directory(gen.libDir).createSync(recursive: true);
-      File(p.join(gen.libDir, 'g.dart')).writeAsStringSync('int g = 1;');
-      final task = Task(
-        'codegen',
-        where: (pkg) => pkg.name == 'lib',
-        generates: (pkg) => 'lib_gen',
-        run: (ctx) async {},
-      );
-
-      Future<String> analyzeRun() async {
-        final runner = RecordingRunner();
-        await runTaskGraph(
-          graph([task], 'analyze'),
-          workspace: ws,
-          runner: runner,
-          out: StringBuffer(),
-          cache: cache(),
-          generated: [gen],
+    test(
+      'the dependents of a generating package see its output in their key',
+      () async {
+        final gen = genFor('lib', 'lib_gen');
+        Directory(gen.libDir).createSync(recursive: true);
+        File(p.join(gen.libDir, 'g.dart')).writeAsStringSync('int g = 1;');
+        final task = Task(
+          'codegen',
+          where: (pkg) => pkg.name == 'lib',
+          generates: (pkg) => 'lib_gen',
+          run: (ctx) async {},
         );
-        return runner.calls.map((c) => p.basename(c.$3)).join(',');
-      }
 
-      // First run populates the cache; the second is fully cached.
-      expect(await analyzeRun(), isNotEmpty);
-      expect(await analyzeRun(), isEmpty);
-      // Regenerating lib_gen must make app's analyze run again.
-      File(p.join(gen.libDir, 'g.dart')).writeAsStringSync('int g = 2;');
-      expect(await analyzeRun(), contains('app'));
-    });
+        Future<String> analyzeRun() async {
+          final runner = RecordingRunner();
+          await runTaskGraph(
+            graph([task], 'analyze'),
+            workspace: ws,
+            runner: runner,
+            out: StringBuffer(),
+            cache: cache(),
+            generated: [gen],
+          );
+          return runner.calls.map((c) => p.basename(c.$3)).join(',');
+        }
+
+        // First run populates the cache; the second is fully cached.
+        expect(await analyzeRun(), isNotEmpty);
+        expect(await analyzeRun(), isEmpty);
+        // Regenerating lib_gen must make app's analyze run again.
+        File(p.join(gen.libDir, 'g.dart')).writeAsStringSync('int g = 2;');
+        expect(await analyzeRun(), contains('app'));
+      },
+    );
   });
 }

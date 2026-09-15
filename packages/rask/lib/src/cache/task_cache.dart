@@ -140,9 +140,7 @@ class TaskCache {
       }
     }
     for (final dir in [...outputDirs]..sort()) {
-      manifest.writeln(
-        'genDir\t${p.relative(dir, from: workspace.root.path)}',
-      );
+      manifest.writeln('genDir\t${p.relative(dir, from: workspace.root.path)}');
       _writeTree(manifest, _readTree(dir, ignore: const {'.git'}));
     }
     return _sha(manifest.toString());
