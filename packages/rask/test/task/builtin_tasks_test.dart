@@ -104,6 +104,10 @@ void main() {
   test('commandNames are the non-task verbs', () {
     // 'help' is CommandRunner's own pre-registered hidden command (F4):
     // a task named 'help' throws ArgumentError: Duplicate command "help".
-    expect(commandNames, {'pub', 'bump', 'publish', 'help'});
+    // 'dev' is registered unconditionally too (even with no plugins), so it
+    // needs the same protection. 'build' is deliberately not here: it is
+    // only ever a task, so a user's own Task('build') legally overrides the
+    // one synthesized from targets.
+    expect(commandNames, {'pub', 'bump', 'publish', 'help', 'dev'});
   });
 }

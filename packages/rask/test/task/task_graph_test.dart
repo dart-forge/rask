@@ -106,7 +106,11 @@ void main() {
     });
 
     test('rejects a task named like a command', () {
-      for (final name in ['pub', 'bump', 'publish', 'help']) {
+      // 'dev' is a command whether or not any plugin provides a target, so
+      // a task named 'dev' must be rejected the same clean way 'pub' is —
+      // the crash this guards against is a duplicate-command ArgumentError
+      // from args' CommandRunner, escaping every catch.
+      for (final name in ['pub', 'bump', 'publish', 'help', 'dev']) {
         expect(
           () => resolveConfig(defineConfig(tasks: [Task(name, run: noop)])),
           throwsA(
