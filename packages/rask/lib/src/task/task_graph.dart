@@ -85,41 +85,46 @@ ResolvedConfig resolveConfig(
   // above: when the user declares their own `build`, no task ever carries a
   // target's dependsOn, so checking only tasks.values (below) would let a
   // target name a task that does not exist and crash later with an
-  // uncaught ArgumentError once the graph is built.
+  // uncaught ArgumentError once the graph is built. The same reasoning
+  // applies to buildInputs/buildOutputs: they never populate a task's
+  // static inputs/outputs (see _buildTask's doc comment), so the checks
+  // below for tasks.values would never see them either.
   for (final resolved in targets.values) {
+    final label = 'Target "${resolved.target.name}" (${resolved.package.name})';
     for (final dep in resolved.target.dependsOn) {
       final depTask = dep.startsWith('^') ? dep.substring(1) : dep;
       if (depTask.isEmpty || depTask.startsWith('^')) {
         throw ConfigError(
-          'Target "${resolved.target.name}" (${resolved.package.name}): '
-          'dependsOn entry "$dep" is malformed. Use "name" or "^name".',
+          '$label: dependsOn entry "$dep" is malformed. Use "name" or "^name".',
         );
       }
       if (!tasks.containsKey(depTask)) {
         throw ConfigError(
-          'Target "${resolved.target.name}" (${resolved.package.name}) '
-          'depends on unknown task "$depTask" '
+          '$label depends on unknown task "$depTask" '
           '(known: ${tasks.keys.join(', ')}).',
         );
       }
     }
+    _checkNonEmptyGlobList('$label: buildInputs', resolved.target.buildInputs);
+    _checkNoIgnoredDirGlobs(
+      '$label: buildInputs',
+      resolved.target.buildInputs ?? const [],
+      _ignoredInputDirs,
+    );
+    _checkNoIgnoredDirGlobs(
+      '$label: buildOutputs',
+      resolved.target.buildOutputs,
+      _ignoredOutputDirs,
+    );
   }
 
   for (final task in tasks.values) {
-    if (task.inputs != null && task.inputs!.isEmpty) {
-      throw ConfigError(
-        'Task "${task.name}": inputs must be null (everything) or a non-empty list.',
-      );
-    }
-    for (final glob in task.inputs ?? const []) {
-      final segment = glob.split('/').first;
-      if (segment == '.dart_tool' || segment == 'build' || segment == '.git') {
-        throw ConfigError(
-          'Task "${task.name}": inputs entry "$glob" is under a directory '
-          'rask never reads (.dart_tool/, build/, .git/).',
-        );
-      }
-    }
+    _checkNonEmptyGlobList('Task "${task.name}": inputs', task.inputs);
+    _checkNoIgnoredDirGlobs(
+      'Task "${task.name}": inputs',
+      task.inputs ?? const [],
+      _ignoredInputDirs,
+    );
     for (final dep in task.dependsOn) {
       final target = dep.startsWith('^') ? dep.substring(1) : dep;
       if (target.isEmpty || target.startsWith('^')) {
@@ -137,6 +142,47 @@ ResolvedConfig resolveConfig(
     }
   }
   return ResolvedConfig(tasks);
+}
+
+/// A null glob list means "everything"; an empty one is always a mistake
+/// (it would narrow the cache key to nothing, so a cache hit would never be
+/// invalidated — a wrong skip, which is worse than a slow run).
+void _checkNonEmptyGlobList(String label, List<String>? globs) {
+  if (globs != null && globs.isEmpty) {
+    throw ConfigError('$label must be null (everything) or a non-empty list.');
+  }
+}
+
+/// Directories the input-side file walk never reads (see
+/// `TaskCache._ignoredDirs`): an inputs entry under one of these would
+/// always look unchanged, since the cache never even visits it.
+const _ignoredInputDirs = {'.dart_tool', 'build', '.git'};
+
+/// Directories the output-verification walk never reads (see
+/// `TaskCache.outputsHash`): it reads through `.dart_tool/` and `build/`
+/// (that is exactly where generated outputs live), so only `.git/` is
+/// truly invisible to it — an outputs entry there would never get
+/// verified.
+const _ignoredOutputDirs = {'.git'};
+
+/// None of [globs] may start with one of [ignoredDirs]: rask's cache
+/// never sees files under them, so depending on such a path (as an
+/// input) would always look unchanged, and declaring it as an output
+/// would never get verified.
+void _checkNoIgnoredDirGlobs(
+  String label,
+  Iterable<String> globs,
+  Set<String> ignoredDirs,
+) {
+  for (final glob in globs) {
+    final segment = glob.split('/').first;
+    if (ignoredDirs.contains(segment)) {
+      final dirs = ignoredDirs.map((d) => '$d/').join(', ');
+      throw ConfigError(
+        '$label entry "$glob" is under a directory rask never reads ($dirs).',
+      );
+    }
+  }
 }
 
 /// One unit of work: [task] in [package].

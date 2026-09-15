@@ -566,5 +566,41 @@ void main() {
         );
       },
     );
+
+    test('a target with an empty buildInputs is a ConfigError naming the '
+        "target's package", () {
+      expect(
+        () => resolveConfig(
+          defineConfig(),
+          targets: targetsFor('app', inputs: []),
+        ),
+        throwsA(
+          isA<ConfigError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('app'), contains('buildInputs')),
+          ),
+        ),
+      );
+    });
+
+    test(
+      "a target's buildOutputs naming an ignored directory is a ConfigError",
+      () {
+        expect(
+          () => resolveConfig(
+            defineConfig(),
+            targets: targetsFor('app', outputs: ['.git/hooks/**']),
+          ),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.message,
+              'message',
+              allOf(contains('app'), contains('.git/hooks/**')),
+            ),
+          ),
+        );
+      },
+    );
   });
 }
