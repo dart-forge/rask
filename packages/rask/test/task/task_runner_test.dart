@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
+import 'package:rask/src/gen/generated_package.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/task/task_runner.dart';
@@ -556,6 +557,122 @@ void main() {
       await run(g, c: c);
       await run(g, c: c);
       expect(runs, 1);
+    });
+  });
+
+  group('generated packages', () {
+    GeneratedPackage genFor(String pkg, String name) => GeneratedPackage(
+      name: name,
+      producer: ws[pkg],
+      taskName: 'codegen',
+      dir: p.join(root.path, '.dart_tool', 'rask', 'gen', name),
+    );
+
+    test('ctx.gen is the generated lib directory, emptied before the run', () async {
+      final gen = genFor('app', 'app_gen');
+      final stale = File(p.join(gen.libDir, 'stale.dart'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('int stale = 1;');
+
+      String? seen;
+      final task = Task(
+        'codegen',
+        where: (pkg) => pkg.name == 'app',
+        generates: (pkg) => 'app_gen',
+        run: (ctx) async {
+          seen = ctx.gen;
+          File(p.join(ctx.gen!, 'fresh.dart')).writeAsStringSync('int fresh = 1;');
+        },
+      );
+      final code = await runTaskGraph(
+        graph([task], 'codegen'),
+        workspace: ws,
+        runner: RecordingRunner(),
+        out: StringBuffer(),
+        generated: [gen],
+      );
+      expect(code, 0);
+      expect(seen, gen.libDir);
+      expect(stale.existsSync(), isFalse);
+      expect(File(p.join(gen.libDir, 'fresh.dart')).existsSync(), isTrue);
+    });
+
+    test('ctx.gen is null for a task that generates nothing', () async {
+      String? seen = 'not null';
+      final task = Task(
+        'plain',
+        where: (pkg) => pkg.name == 'app',
+        run: (ctx) async => seen = ctx.gen,
+      );
+      await runTaskGraph(
+        graph([task], 'plain'),
+        workspace: ws,
+        runner: RecordingRunner(),
+        out: StringBuffer(),
+      );
+      expect(seen, isNull);
+    });
+
+    test('a cache hit leaves the generated directory alone', () async {
+      final gen = genFor('app', 'app_gen');
+      var runs = 0;
+      final task = Task(
+        'codegen',
+        where: (pkg) => pkg.name == 'app',
+        generates: (pkg) => 'app_gen',
+        run: (ctx) async {
+          runs++;
+          File(p.join(ctx.gen!, 'out.dart')).writeAsStringSync('int out = $runs;');
+        },
+      );
+      for (var i = 0; i < 2; i++) {
+        await runTaskGraph(
+          graph([task], 'codegen'),
+          workspace: ws,
+          runner: RecordingRunner(),
+          out: StringBuffer(),
+          // A fresh TaskCache each round: one instance memoizes package trees.
+          cache: cache(),
+          generated: [gen],
+        );
+      }
+      expect(runs, 1);
+      expect(
+        File(p.join(gen.libDir, 'out.dart')).readAsStringSync(),
+        'int out = 1;',
+      );
+    });
+
+    test('the dependents of a generating package see its output in their key', () async {
+      final gen = genFor('lib', 'lib_gen');
+      Directory(gen.libDir).createSync(recursive: true);
+      File(p.join(gen.libDir, 'g.dart')).writeAsStringSync('int g = 1;');
+      final task = Task(
+        'codegen',
+        where: (pkg) => pkg.name == 'lib',
+        generates: (pkg) => 'lib_gen',
+        run: (ctx) async {},
+      );
+
+      Future<String> analyzeRun() async {
+        final runner = RecordingRunner();
+        await runTaskGraph(
+          graph([task], 'analyze'),
+          workspace: ws,
+          runner: runner,
+          out: StringBuffer(),
+          cache: cache(),
+          generated: [gen],
+        );
+        return runner.calls.map((c) => p.basename(c.$3)).join(',');
+      }
+
+      // First run populates the cache; the second is fully cached.
+      expect(await analyzeRun(), isNotEmpty);
+      expect(await analyzeRun(), isEmpty);
+      // Regenerating lib_gen must make app's analyze run again.
+      File(p.join(gen.libDir, 'g.dart')).writeAsStringSync('int g = 2;');
+      expect(await analyzeRun(), contains('app'));
     });
   });
 }
