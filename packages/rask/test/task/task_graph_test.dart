@@ -455,7 +455,7 @@ void main() {
 
     test("the build task carries the target's cache declarations", () {
       final resolved = resolveConfig(
-        defineConfig(),
+        defineConfig(tasks: [Task('codegen', run: (ctx) async {})]),
         targets: targetsFor(
           'app',
           dependsOn: ['codegen'],
@@ -467,6 +467,25 @@ void main() {
       expect(resolved['build'].inputs, ['lib/**']);
       expect(resolved['build'].outputs, ['build/**']);
     });
+
+    test(
+      "a target depending on a task rask.dart never defines is a ConfigError",
+      () {
+        expect(
+          () => resolveConfig(
+            defineConfig(),
+            targets: targetsFor('app', dependsOn: ['codegen']),
+          ),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.message,
+              'message',
+              contains('codegen'),
+            ),
+          ),
+        );
+      },
+    );
 
     test('the build task calls the target of the package it runs in', () async {
       var calls = <String>[];

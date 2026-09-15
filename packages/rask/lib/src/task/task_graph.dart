@@ -77,10 +77,8 @@ ResolvedConfig resolveConfig(
     }
   }
 
-  Task? synthesizedBuild;
   if (targets.isNotEmpty && !tasks.containsKey('build')) {
-    synthesizedBuild = _buildTask(targets);
-    tasks['build'] = synthesizedBuild;
+    tasks['build'] = _buildTask(targets);
   }
 
   for (final task in tasks.values) {
@@ -107,13 +105,6 @@ ResolvedConfig resolveConfig(
         );
       }
       if (!tasks.containsKey(target)) {
-        // The synthesized `build` task's dependsOn comes from plugin
-        // targets, not from rask.dart, and may legitimately name a task
-        // (typically `codegen`) that a plugin expects the workspace to
-        // declare on its own. rask cannot tell that apart from a genuine
-        // mistake at this point, so only this one task skips the check;
-        // buildTaskGraph still fails if the task never turns up.
-        if (identical(task, synthesizedBuild)) continue;
         throw ConfigError(
           'Task "${task.name}" depends on unknown task "$target" '
           '(known: ${tasks.keys.join(', ')}).',
