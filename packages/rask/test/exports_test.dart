@@ -35,6 +35,11 @@ void main() {
     expect(engine.topologicalOrder, isA<Function>());
     expect(engine.bumpWorkspace, isA<Function>());
     expect(engine.publishPackages, isA<Function>());
+    final Type t6 = engine.GeneratedPackage;
+    expect(t6, isNotNull);
+    expect(engine.resolveGeneratedPackages, isA<Function>());
+    expect(engine.ensureGeneratedPackages, isA<Function>());
+    expect(engine.genRoot, '.dart_tool/rask/gen');
     // and everything from rask.dart too
     expect(engine.defineConfig(), isA<engine.RaskConfig>());
   });

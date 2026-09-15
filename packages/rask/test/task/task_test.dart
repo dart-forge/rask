@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rask/src/task/task.dart';
+import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:test/test.dart';
 
@@ -51,6 +52,53 @@ dev_dependencies:
       expect(pkg.dependsOn('other'), isTrue);
       expect(pkg.dependsOn('test'), isTrue);
       expect(pkg.dependsOn('freezed'), isFalse);
+    });
+  });
+
+  group('generates', () {
+    test('defaults to null and round-trips the given function', () {
+      expect(Task('a', run: (_) async {}).generates, isNull);
+      final t = Task(
+        'codegen',
+        run: (_) async {},
+        generates: (pkg) => '${pkg.name}_gen',
+      );
+      expect(t.generates, isNotNull);
+    });
+
+    test('resolveConfig keeps generates on a user task', () {
+      final resolved = resolveConfig(
+        defineConfig(
+          tasks: [
+            Task('codegen', run: (_) async {}, generates: (pkg) => 'x_gen'),
+          ],
+        ),
+      );
+      expect(resolved['codegen'].generates, isNotNull);
+    });
+
+    test('resolveConfig rejects generates without a run in the same task', () {
+      expect(
+        () => resolveConfig(
+          defineConfig(tasks: [Task('codegen', generates: (pkg) => 'x_gen')]),
+        ),
+        throwsA(
+          isA<ConfigError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('codegen'), contains('generates')),
+          ),
+        ),
+      );
+    });
+
+    test('resolveConfig rejects generates bolted onto a built-in task', () {
+      expect(
+        () => resolveConfig(
+          defineConfig(tasks: [Task('test', generates: (pkg) => 'x_gen')]),
+        ),
+        throwsA(isA<ConfigError>()),
+      );
     });
   });
 }

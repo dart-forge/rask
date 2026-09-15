@@ -4,6 +4,8 @@ import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
+import 'package:rask/src/gen/ensure.dart';
+import 'package:rask/src/gen/generated_package.dart';
 import 'package:rask/src/release/bump.dart';
 import 'package:rask/src/release/publish.dart';
 import 'package:rask/src/run/process_runner.dart';
@@ -144,6 +146,51 @@ class _TaskCommand extends Command<int> {
   @override
   Future<int> run() async {
     final ws = rask._loadWorkspace();
+    final List<GeneratedPackage> generated;
+    try {
+      generated = resolveGeneratedPackages(resolved, ws);
+    } on ConfigError catch (e) {
+      throw _RaskError(e.message);
+    }
+    if (generated.isNotEmpty) {
+      final EnsureResult ensured;
+      try {
+        ensured = await ensureGeneratedPackages(
+          workspace: ws,
+          generated: generated,
+          runner: rask.processRunner,
+          out: rask.out,
+        );
+      } on ConfigError catch (e) {
+        throw _RaskError(e.message);
+      } on FileSystemException catch (e) {
+        rask.out.writeln(
+          'rask: could not write the generated packages: ${e.message} '
+          '(${e.path})',
+        );
+        return exitCannotRun;
+      }
+      if (ensured.pubGetExitCode != 0) return ensured.pubGetExitCode;
+      for (final name in ensured.created) {
+        final g = generated.firstWhere((g) => g.name == name);
+        final producer = g.producer;
+        final declaringTaskName = g.taskName;
+        final pubspec = p.join(
+          p.relative(producer.path, from: ws.root.path),
+          'pubspec.yaml',
+        );
+        rask.out.writeln(
+          'rask: created package $name in $genRoot\n'
+          '      ${producer.name} imports it without declaring it, so the '
+          'analyzer may hint about an undeclared dependency. Adding '
+          '`$name: any` to $pubspec silences the hint, but then no clone '
+          'can resolve dependencies until rask has generated $name, and '
+          'neither `dart pub get` nor `rask pub get` can bootstrap that '
+          '— leaving it undeclared is the safer default. Run '
+          '`rask $declaringTaskName` now so $name has something in it to import.',
+        );
+      }
+    }
     final targets = rask._select(ws, argResults!.multiOption('filter'));
     final cache = argResults!.flag('cache')
         ? TaskCache(
@@ -182,6 +229,7 @@ class _TaskCommand extends Command<int> {
       configKey: rask.configKey,
       jobs: jobs,
       taskName: task.name,
+      generated: generated,
     );
   }
 }

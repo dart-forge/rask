@@ -55,6 +55,50 @@ The first run after editing `rask.dart` compiles it with `dart compile exe` (a f
 `rask: compiling rask.dart …` on stderr). Every later run starts in milliseconds; the compiled program is
 cached by the content of every file it depends on.
 
+## Generated code
+
+A task can own a package instead of writing into yours:
+
+```dart
+Task('codegen',
+    where: (pkg) => pkg.dependsOn('my_orm'),
+    generates: (pkg) => '${pkg.name}_gen',
+    run: (ctx) => ctx.exec('dart', ['run', 'my_orm:gen', '--out', ctx.gen!]));
+```
+
+`rask codegen` then creates `.dart_tool/rask/gen/<name>/`, points the root
+`pubspec_overrides.yaml` at it, adds that file to `.gitignore`, runs
+`dart pub get`, and empties `ctx.gen` before your generator writes into it.
+The analyzer, your IDE, `dart test` and `dart compile` all see
+`package:<name>/...` from then on, and nothing generated is committed.
+
+Two things to know. A package whose code comes from a generated package
+cannot be published: `dart pub publish` rejects imports that only a
+dependency override resolves. And the package that imports `<name>` does
+not declare it, so the analyzer may hint about an undeclared dependency;
+adding `<name>: any` would silence that hint, but then no clone can resolve
+dependencies until rask has generated the package, and neither
+`dart pub get` nor `rask pub get` can bootstrap that — so leave it
+undeclared.
+
+A task that reads another package's generated code has to say so: `generates`
+tells rask who *produces* a package, never who *imports* one, and rask
+deliberately knows nothing about imports. Add `dependsOn: ['^codegen']` to the
+consuming task (and `'codegen'` too when it also reads its own package's
+generated code) so it never runs against a tree the generator is still
+rewriting.
+
+A generated directory folds into the cache key of every task in the package
+that produces it and every task in a package that depends on that producer —
+not every task that happens to import `package:<name>`. A package that
+imports it without declaring the dependency still resolves it (the workspace
+has one `package_config.json`), but rask cannot see that import, so its tasks
+keep whatever key they already had.
+
+The first `rask <task>` after adding `generates` creates the package with an
+empty `lib`, so `dart pub get` succeeds but the imports it declares do not
+resolve until the generating task has actually run once.
+
 ## Packages
 
 | Package | What it is |
@@ -90,7 +134,7 @@ collection of plain packages; anything framework-specific belongs in a `rask.dar
 ## Status
 
 Early. Working today: `test`, `analyze`, `pub`, `bump`, `publish`, `--filter`, `--jobs`, the content-addressed
-cache with output verification, and `rask.dart` with custom tasks. Not yet: a code-generation API that keeps
-generated code out of `lib/`, and `dev`/`build` verbs with framework plugins.
+cache with output verification, `rask.dart` with custom tasks, and a `Task.generates` API that keeps generated
+code out of `lib/`. Not yet: `dev`/`build` verbs with framework plugins.
 
 Requires Dart 3.13 or later.

@@ -27,6 +27,16 @@ class Task {
   /// [inputs] and verified on a cache hit.
   final List<String> outputs;
 
+  /// The package rask generates for each package this task applies to, by
+  /// name: `generates: (pkg) => '${pkg.name}_gen'`.
+  ///
+  /// rask owns that package (`.dart_tool/rask/gen/<name>/`) and its pubspec,
+  /// puts a path override for it in the root `pubspec_overrides.yaml`, and
+  /// hands [TaskContext.gen] to [run] as the directory to write into. A task
+  /// that declares this must also declare [run]: rask never generates
+  /// anything by itself.
+  final String Function(Package pkg)? generates;
+
   final String? description;
 
   Task(
@@ -36,6 +46,7 @@ class Task {
     this.dependsOn = const [],
     this.inputs,
     this.outputs = const [],
+    this.generates,
     this.description,
   });
 
@@ -50,6 +61,10 @@ abstract class TaskContext {
 
   /// Arguments after `--` on the command line.
   List<String> get args;
+
+  /// Absolute path of the `lib` directory of the package this task generates,
+  /// emptied right before the run. Null when the task has no `generates`.
+  String? get gen;
 
   /// Runs `dart <args>` in the package directory. Throws [ProcessFailure]
   /// on a non-zero exit.

@@ -1,0 +1,3 @@
+tags:
+  integration:
+    skip: "Runs a real dart pub get and dart analyze (slow). Run with: dart test -t integration --run-skipped"

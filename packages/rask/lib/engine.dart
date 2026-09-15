@@ -6,6 +6,8 @@ library;
 export 'rask.dart';
 export 'src/cache/task_cache.dart';
 export 'src/cli/rask_command_runner.dart';
+export 'src/gen/ensure.dart';
+export 'src/gen/generated_package.dart';
 export 'src/release/bump.dart';
 export 'src/release/publish.dart';
 export 'src/run/process_runner.dart';

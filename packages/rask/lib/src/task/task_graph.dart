@@ -37,6 +37,12 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
     if (!seen.add(user.name)) {
       throw ConfigError('Task "${user.name}" is defined twice in rask.dart.');
     }
+    if (user.generates != null && user.run == null) {
+      throw ConfigError(
+        'Task "${user.name}" declares generates but no run. rask does not '
+        'generate anything by itself: the task must say how.',
+      );
+    }
     final base = tasks[user.name];
     if (base == null) {
       if (user.run == null) {
@@ -53,6 +59,7 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
         dependsOn: user.dependsOn.isNotEmpty ? user.dependsOn : base.dependsOn,
         inputs: user.inputs ?? base.inputs,
         outputs: user.outputs.isNotEmpty ? user.outputs : base.outputs,
+        generates: user.generates ?? base.generates,
         description: user.description ?? base.description,
       );
     }
