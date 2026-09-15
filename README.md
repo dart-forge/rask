@@ -55,6 +55,32 @@ The first run after editing `rask.dart` compiles it with `dart compile exe` (a f
 `rask: compiling rask.dart …` on stderr). Every later run starts in milliseconds; the compiled program is
 cached by the content of every file it depends on.
 
+## Generated code
+
+A task can own a package instead of writing into yours:
+
+```dart
+Task('codegen',
+    where: (pkg) => pkg.dependsOn('my_orm'),
+    generates: (pkg) => '${pkg.name}_gen',
+    run: (ctx) => ctx.exec('dart', ['run', 'my_orm:gen', '--out', ctx.gen!]));
+```
+
+`rask codegen` then creates `.dart_tool/rask/gen/<name>/`, points the root
+`pubspec_overrides.yaml` at it, adds that file to `.gitignore`, runs
+`dart pub get`, and empties `ctx.gen` before your generator writes into it.
+The analyzer, your IDE, `dart test` and `dart compile` all see
+`package:<name>/...` from then on, and nothing generated is committed.
+
+Two things to know. A package whose code comes from a generated package
+cannot be published: `dart pub publish` rejects imports that only a
+dependency override resolves. And the package that imports `<name>` does
+not declare it, so the analyzer may hint about an undeclared dependency;
+adding `<name>: any` would silence that hint, but then no clone can resolve
+dependencies until rask has generated the package, and neither
+`dart pub get` nor `rask pub get` can bootstrap that — so leave it
+undeclared.
+
 ## Packages
 
 | Package | What it is |
@@ -90,7 +116,7 @@ collection of plain packages; anything framework-specific belongs in a `rask.dar
 ## Status
 
 Early. Working today: `test`, `analyze`, `pub`, `bump`, `publish`, `--filter`, `--jobs`, the content-addressed
-cache with output verification, and `rask.dart` with custom tasks. Not yet: a code-generation API that keeps
-generated code out of `lib/`, and `dev`/`build` verbs with framework plugins.
+cache with output verification, `rask.dart` with custom tasks, and a `Task.generates` API that keeps generated
+code out of `lib/`. Not yet: `dev`/`build` verbs with framework plugins.
 
 Requires Dart 3.13 or later.

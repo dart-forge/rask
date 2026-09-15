@@ -1,3 +1,14 @@
+## Unreleased
+
+- `Task(generates:)` declares a package rask generates for each package the
+  task applies to. rask owns `.dart_tool/rask/gen/<name>/` and the managed
+  entries of the root `pubspec_overrides.yaml`, keeps `.gitignore` in step,
+  runs `dart pub get` when any of that changes, and hands the output
+  directory to the task as `ctx.gen`.
+- Generated directories are part of a task's cache key, and of the output
+  verification of the task that produces them, so regenerating never leaves
+  a stale skip behind.
+
 ## 0.1.0
 
 First release. The library a `rask.dart` imports (`package:rask/rask.dart`), the engine behind the `rask` command (`package:rask/engine.dart`), and test doubles for it (`package:rask/testing.dart`).
