@@ -101,4 +101,11 @@ dev_dependencies:
       );
     });
   });
+
+  group('plugins', () {
+    test('defineConfig takes plugins and defaults them to empty', () {
+      expect(defineConfig().plugins, isEmpty);
+      expect(defineConfig(plugins: const []).plugins, isEmpty);
+    });
+  });
 }

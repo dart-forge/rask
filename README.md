@@ -99,6 +99,46 @@ The first `rask <task>` after adding `generates` creates the package with an
 empty `lib`, so `dart pub get` succeeds but the imports it declares do not
 resolve until the generating task has actually run once.
 
+## dev and build
+
+A plugin provides targets: the things `rask dev` starts and `rask build`
+produces. rask owns the loop, so every framework behaves the same.
+
+```dart
+import 'package:rask/rask.dart';
+import 'package:rask_something/rask_something.dart';
+
+final config = defineConfig(plugins: [something()]);
+```
+
+`rask build` is a task like any other: cached, `-F`-able, parallel with
+`-j`, and able to depend on `codegen`. It runs in every package a plugin
+claims.
+
+`rask dev` starts one package. With several to choose from it lists them and
+asks for `-F`. `--port` is passed to the target exactly as given; rask
+neither assigns a port nor checks that one is free, so it is entirely up to
+the target what to do with it. From then on rask watches the target's files,
+debounces, runs the target's prerequisite tasks, and then does what the
+target asked for on a change: restart the process, rebuild its artifacts,
+both, or nothing when the runtime watches its own sources. A failure keeps
+the previous process and the previous artifacts and waits for the next
+change, and the process exiting on its own does not end `rask dev` either,
+because the usual cause is a compile error you are about to fix. The one
+failure that does end `rask dev` is the process itself never starting in the
+first place — `dart` missing from PATH, for instance — since there is
+nothing running yet to fall back to. Ctrl+C stops the process and everything
+it started.
+
+The default `watch` is `lib/**` and `bin/**`. A prerequisite task that writes
+into one of those — a `codegen` task producing `*.g.dart` in `lib/`, say —
+feeds its own output back into the watcher, so narrow `watch` to exclude
+whatever that task writes when you add one.
+
+To write a plugin, implement `RaskPlugin.targetFor` and return a `Target`:
+what to run (`command`), what to ship (`build`), what to do first
+(`prepare`), what to watch, and what a change means (`onChange`).
+
 ## Packages
 
 | Package | What it is |
@@ -129,12 +169,12 @@ right order, only when needed. rask does only that part, and it does it the way 
 content-hashed inputs, staged parallelism, filters — without inheriting any of the JS-specific problems.
 
 rask has no framework-specific knowledge. It works the same for a server framework, a Flutter app and a
-collection of plain packages; anything framework-specific belongs in a `rask.dart` or, later, in a plugin.
+collection of plain packages; anything framework-specific belongs in a `rask.dart` or in a plugin.
 
 ## Status
 
 Early. Working today: `test`, `analyze`, `pub`, `bump`, `publish`, `--filter`, `--jobs`, the content-addressed
-cache with output verification, `rask.dart` with custom tasks, and a `Task.generates` API that keeps generated
-code out of `lib/`. Not yet: `dev`/`build` verbs with framework plugins.
+cache with output verification, `rask.dart` with custom tasks, a `Task.generates` API that keeps generated
+code out of `lib/`, and `dev`/`build` verbs driven by framework plugins.
 
 Requires Dart 3.13 or later.

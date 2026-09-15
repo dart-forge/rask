@@ -1,12 +1,41 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:rask/src/plugin/plugin.dart';
+import 'package:rask/src/plugin/resolve_targets.dart';
 import 'package:rask/src/task/builtin_tasks.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/workspace/topological_order.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
+
+class _Stub implements RaskPlugin {
+  @override
+  Target? targetFor(Package pkg) => null;
+}
+
+class _Ctx implements TargetContext {
+  _Ctx(this.package);
+  @override
+  final Package package;
+  @override
+  List<String> get args => const [];
+  @override
+  int? get port => null;
+  @override
+  String? get gen => null;
+  @override
+  Workspace get workspace => throw UnimplementedError();
+  @override
+  Future<void> dart(List<String> args) => throw UnimplementedError();
+  @override
+  Future<void> exec(String e, List<String> a, {String? workingDirectory}) =>
+      throw UnimplementedError();
+  @override
+  void log(String message) {}
+}
 
 void main() {
   group('resolveConfig', () {
@@ -77,7 +106,11 @@ void main() {
     });
 
     test('rejects a task named like a command', () {
-      for (final name in ['pub', 'bump', 'publish', 'help']) {
+      // 'dev' is a command whether or not any plugin provides a target, so
+      // a task named 'dev' must be rejected the same clean way 'pub' is —
+      // the crash this guards against is a duplicate-command ArgumentError
+      // from args' CommandRunner, escaping every catch.
+      for (final name in ['pub', 'bump', 'publish', 'help', 'dev']) {
         expect(
           () => resolveConfig(defineConfig(tasks: [Task(name, run: noop)])),
           throwsA(
@@ -375,5 +408,199 @@ void main() {
       expect(n, TaskNode(config([])['analyze'], ws['lone']));
       expect(n.hashCode, TaskNode(config([])['analyze'], ws['lone']).hashCode);
     });
+  });
+
+  group('build from targets', () {
+    Package pkg(String name) => Package(
+      name: name,
+      path: '/ws/packages/$name',
+      dependencies: const [],
+      pubspec: loadYaml('name: $name') as YamlMap,
+    );
+
+    Map<String, ResolvedTarget> targetsFor(
+      String name, {
+      List<String> dependsOn = const [],
+      List<String>? inputs,
+      List<String> outputs = const [],
+      Future<void> Function(TargetContext)? build,
+    }) {
+      final package = pkg(name);
+      return {
+        name: ResolvedTarget(
+          package: package,
+          plugin: _Stub(),
+          target: Target(
+            'server',
+            command: (ctx) => Command('dart', const ['run']),
+            build: build ?? (ctx) async {},
+            dependsOn: dependsOn,
+            buildInputs: inputs,
+            buildOutputs: outputs,
+          ),
+        ),
+      };
+    }
+
+    test('no targets means no build task', () {
+      expect(resolveConfig(defineConfig()).tasks.containsKey('build'), isFalse);
+    });
+
+    test('a target contributes a build task', () {
+      final resolved = resolveConfig(
+        defineConfig(),
+        targets: targetsFor('app'),
+      );
+      final build = resolved['build'];
+      expect(build.run, isNotNull);
+      expect(build.where!(pkg('app')), isTrue);
+      expect(build.where!(pkg('lib')), isFalse);
+    });
+
+    test("the build task carries the target's cache declarations", () {
+      final resolved = resolveConfig(
+        defineConfig(tasks: [Task('codegen', run: (ctx) async {})]),
+        targets: targetsFor(
+          'app',
+          dependsOn: ['codegen'],
+          inputs: ['lib/**'],
+          outputs: ['build/**'],
+        ),
+      );
+      expect(resolved['build'].dependsOn, ['codegen']);
+      // Per-package form, not the static one: see the next test for why.
+      expect(resolved['build'].inputsFor!(pkg('app')), ['lib/**']);
+      expect(resolved['build'].outputsFor!(pkg('app')), ['build/**']);
+      expect(resolved['build'].inputs, isNull);
+      expect(resolved['build'].outputs, isEmpty);
+    });
+
+    test("each package's target contributes only its own inputsFor/outputsFor "
+        '— never unioned with another target\'s', () {
+      final resolved = resolveConfig(
+        defineConfig(),
+        targets: {
+          ...targetsFor('server', outputs: ['out/server/**']),
+          ...targetsFor('web', outputs: ['out/web/**']),
+        },
+      );
+      final build = resolved['build'];
+      expect(build.outputsFor!(pkg('server')), ['out/server/**']);
+      expect(build.outputsFor!(pkg('web')), ['out/web/**']);
+      // Neither package's globs leak into the other's.
+      expect(build.outputsFor!(pkg('server')), isNot(contains('out/web/**')));
+      expect(build.outputsFor!(pkg('web')), isNot(contains('out/server/**')));
+    });
+
+    test("dependsOn stays unioned across targets: a package's build node still "
+        "gets a prerequisite another target declared", () {
+      final resolved = resolveConfig(
+        defineConfig(tasks: [Task('codegen', run: (ctx) async {})]),
+        targets: {
+          ...targetsFor('server', dependsOn: ['codegen']),
+          ...targetsFor('web'),
+        },
+      );
+      expect(resolved['build'].dependsOn, ['codegen']);
+    });
+
+    test(
+      "a target depending on a task rask.dart never defines is a ConfigError",
+      () {
+        expect(
+          () => resolveConfig(
+            defineConfig(),
+            targets: targetsFor('app', dependsOn: ['codegen']),
+          ),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.message,
+              'message',
+              contains('codegen'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test('the build task calls the target of the package it runs in', () async {
+      var calls = <String>[];
+      final resolved = resolveConfig(
+        defineConfig(),
+        targets: {...targetsFor('app', build: (ctx) async => calls.add('app'))},
+      );
+      // The synthesized run looks the package up in the resolved targets.
+      await resolved['build'].run!(_Ctx(pkg('app')));
+      expect(calls, ['app']);
+    });
+
+    test('a user task named build wins', () {
+      final resolved = resolveConfig(
+        defineConfig(
+          tasks: [Task('build', run: (ctx) async {}, description: 'mine')],
+        ),
+        targets: targetsFor('app'),
+      );
+      expect(resolved['build'].description, 'mine');
+      expect(resolved['build'].where, isNull);
+    });
+
+    test(
+      "a target's dependsOn is still validated when the user declares their "
+      'own build task (there is no synthesized build task to carry the check)',
+      () {
+        expect(
+          () => resolveConfig(
+            defineConfig(
+              tasks: [Task('build', run: (ctx) async {}, description: 'mine')],
+            ),
+            targets: targetsFor('app', dependsOn: ['codegen']),
+          ),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.message,
+              'message',
+              contains('codegen'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test('a target with an empty buildInputs is a ConfigError naming the '
+        "target's package", () {
+      expect(
+        () => resolveConfig(
+          defineConfig(),
+          targets: targetsFor('app', inputs: []),
+        ),
+        throwsA(
+          isA<ConfigError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('app'), contains('buildInputs')),
+          ),
+        ),
+      );
+    });
+
+    test(
+      "a target's buildOutputs naming an ignored directory is a ConfigError",
+      () {
+        expect(
+          () => resolveConfig(
+            defineConfig(),
+            targets: targetsFor('app', outputs: ['.git/hooks/**']),
+          ),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.message,
+              'message',
+              allOf(contains('app'), contains('.git/hooks/**')),
+            ),
+          ),
+        );
+      },
+    );
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -6,8 +7,12 @@ import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
 import 'package:rask/src/gen/ensure.dart';
 import 'package:rask/src/gen/generated_package.dart';
+import 'package:rask/src/plugin/dev_loop.dart';
+import 'package:rask/src/plugin/resolve_targets.dart';
+import 'package:rask/src/plugin/watch_globs.dart';
 import 'package:rask/src/release/bump.dart';
 import 'package:rask/src/release/publish.dart';
+import 'package:rask/src/run/process_launcher.dart';
 import 'package:rask/src/run/process_runner.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
@@ -26,6 +31,7 @@ class RaskCommandRunner {
   final Directory cwd;
   final ProcessRunner processRunner;
   final PackageRegistry registry;
+  final ProcessLauncher launcher;
   final StringSink out;
   final RaskConfig config;
 
@@ -36,6 +42,7 @@ class RaskCommandRunner {
     required this.cwd,
     this.processRunner = const SystemProcessRunner(),
     this.registry = const HttpPackageRegistry(),
+    this.launcher = const SystemProcessLauncher(),
     StringSink? out,
     this.config = const RaskConfig(),
     this.configKey = '',
@@ -43,11 +50,23 @@ class RaskCommandRunner {
 
   /// Runs [args] and returns the process exit code.
   Future<int> run(List<String> args) async {
+    var targets = const <String, ResolvedTarget>{};
     final ResolvedConfig resolved;
     try {
-      resolved = resolveConfig(config);
+      // A plugin's targets decide whether there is a `build` task at all,
+      // and that has to be known before the commands are built. Finding the
+      // workspace can fail (rask run outside one), and that failure has to
+      // stay a usage error with the same message as before.
+      if (config.plugins.isNotEmpty) {
+        final ws = _loadWorkspace();
+        targets = resolveTargets(config, ws);
+      }
+      resolved = resolveConfig(config, targets: targets);
     } on ConfigError catch (e) {
       out.writeln('rask: $e');
+      return exitUsage;
+    } on _RaskError catch (e) {
+      out.writeln('rask: ${e.message}');
       return exitUsage;
     }
 
@@ -59,6 +78,7 @@ class RaskCommandRunner {
       runner.addCommand(_TaskCommand(task, resolved, this));
     }
     runner
+      ..addCommand(_DevCommand(this, resolved, targets))
       ..addCommand(_PubCommand(this))
       ..addCommand(_BumpCommand(this))
       ..addCommand(_PublishCommand(this));
@@ -91,6 +111,61 @@ class RaskCommandRunner {
       );
     }
     return Workspace.load(root);
+  }
+
+  /// Brings the packages a `rask.dart` task generates in line with
+  /// [resolved] before anything else runs, printing the one-time note for
+  /// each newly created package.
+  ///
+  /// Returns null on success, or the exit code to return immediately on
+  /// failure. Shared by every command that runs a task graph, so a
+  /// generated package is never stale by the time its producer needs it.
+  Future<int?> _syncGenerated(Workspace ws, ResolvedConfig resolved) async {
+    final List<GeneratedPackage> generated;
+    try {
+      generated = resolveGeneratedPackages(resolved, ws);
+    } on ConfigError catch (e) {
+      throw _RaskError(e.message);
+    }
+    if (generated.isEmpty) return null;
+    final EnsureResult ensured;
+    try {
+      ensured = await ensureGeneratedPackages(
+        workspace: ws,
+        generated: generated,
+        runner: processRunner,
+        out: out,
+      );
+    } on ConfigError catch (e) {
+      throw _RaskError(e.message);
+    } on FileSystemException catch (e) {
+      out.writeln(
+        'rask: could not write the generated packages: ${e.message} '
+        '(${e.path})',
+      );
+      return exitCannotRun;
+    }
+    if (ensured.pubGetExitCode != 0) return ensured.pubGetExitCode;
+    for (final name in ensured.created) {
+      final g = generated.firstWhere((g) => g.name == name);
+      final producer = g.producer;
+      final declaringTaskName = g.taskName;
+      final pubspec = p.join(
+        p.relative(producer.path, from: ws.root.path),
+        'pubspec.yaml',
+      );
+      out.writeln(
+        'rask: created package $name in $genRoot\n'
+        '      ${producer.name} imports it without declaring it, so the '
+        'analyzer may hint about an undeclared dependency. Adding '
+        '`$name: any` to $pubspec silences the hint, but then no clone '
+        'can resolve dependencies until rask has generated $name, and '
+        'neither `dart pub get` nor `rask pub get` can bootstrap that '
+        '— leaving it undeclared is the safer default. Run '
+        '`rask $declaringTaskName` now so $name has something in it to import.',
+      );
+    }
+    return null;
   }
 }
 
@@ -146,51 +221,11 @@ class _TaskCommand extends Command<int> {
   @override
   Future<int> run() async {
     final ws = rask._loadWorkspace();
-    final List<GeneratedPackage> generated;
-    try {
-      generated = resolveGeneratedPackages(resolved, ws);
-    } on ConfigError catch (e) {
-      throw _RaskError(e.message);
-    }
-    if (generated.isNotEmpty) {
-      final EnsureResult ensured;
-      try {
-        ensured = await ensureGeneratedPackages(
-          workspace: ws,
-          generated: generated,
-          runner: rask.processRunner,
-          out: rask.out,
-        );
-      } on ConfigError catch (e) {
-        throw _RaskError(e.message);
-      } on FileSystemException catch (e) {
-        rask.out.writeln(
-          'rask: could not write the generated packages: ${e.message} '
-          '(${e.path})',
-        );
-        return exitCannotRun;
-      }
-      if (ensured.pubGetExitCode != 0) return ensured.pubGetExitCode;
-      for (final name in ensured.created) {
-        final g = generated.firstWhere((g) => g.name == name);
-        final producer = g.producer;
-        final declaringTaskName = g.taskName;
-        final pubspec = p.join(
-          p.relative(producer.path, from: ws.root.path),
-          'pubspec.yaml',
-        );
-        rask.out.writeln(
-          'rask: created package $name in $genRoot\n'
-          '      ${producer.name} imports it without declaring it, so the '
-          'analyzer may hint about an undeclared dependency. Adding '
-          '`$name: any` to $pubspec silences the hint, but then no clone '
-          'can resolve dependencies until rask has generated $name, and '
-          'neither `dart pub get` nor `rask pub get` can bootstrap that '
-          '— leaving it undeclared is the safer default. Run '
-          '`rask $declaringTaskName` now so $name has something in it to import.',
-        );
-      }
-    }
+    final sync = await rask._syncGenerated(ws, resolved);
+    if (sync != null) return sync;
+    // Pure and already validated by _syncGenerated above with the same
+    // arguments, so this cannot throw here.
+    final generated = resolveGeneratedPackages(resolved, ws);
     final targets = rask._select(ws, argResults!.multiOption('filter'));
     final cache = argResults!.flag('cache')
         ? TaskCache(
@@ -233,6 +268,165 @@ class _TaskCommand extends Command<int> {
     );
   }
 }
+
+/// `rask dev`: starts one package's target and restarts it as files change.
+///
+/// Registered even when no plugin provides a target, so that running it says
+/// so instead of `command not found`.
+class _DevCommand extends Command<int> {
+  _DevCommand(this.rask, this.resolved, this.targets) {
+    argParser
+      ..addMultiOption(
+        'filter',
+        abbr: 'F',
+        valueHelp: 'package',
+        help: 'Which package to start, when more than one has a target.',
+      )
+      ..addOption(
+        'port',
+        abbr: 'p',
+        valueHelp: 'N',
+        help: 'Passed to the target as it is. rask does not assign ports.',
+      );
+  }
+
+  @override
+  final name = 'dev';
+  @override
+  final description =
+      'Start the target of one package and restart it as files change.';
+  final RaskCommandRunner rask;
+  final ResolvedConfig resolved;
+  final Map<String, ResolvedTarget> targets;
+
+  @override
+  String get invocation => 'rask dev [-F <package>] [--port <N>] [-- <args>]';
+
+  @override
+  Future<int> run() async {
+    final ws = rask._loadWorkspace();
+    final sync = await rask._syncGenerated(ws, resolved);
+    if (sync != null) return sync;
+
+    final filters = argResults!.multiOption('filter');
+    if (filters.length > 1) {
+      throw _RaskError('dev starts one package; -F takes a single name.');
+    }
+    if (targets.isEmpty) {
+      throw _RaskError(
+        'no target to run. `dev` needs a plugin that provides one; add it to '
+        'rask.dart\'s plugins.',
+      );
+    }
+    final ResolvedTarget target;
+    if (filters.isEmpty) {
+      if (targets.length > 1) {
+        throw _RaskError(
+          'more than one package has a target (${targets.keys.join(', ')}). '
+          'Pick one with -F <package>.',
+        );
+      }
+      target = targets.values.single;
+    } else {
+      final chosen = targets[filters.single];
+      if (chosen == null) {
+        throw _RaskError(
+          '${filters.single} has no target. Packages with one: '
+          '${targets.keys.join(', ')}.',
+        );
+      }
+      target = chosen;
+    }
+
+    final portArg = argResults!.option('port');
+    final port = portArg == null ? null : int.tryParse(portArg);
+    if (portArg != null && port == null) {
+      throw _RaskError('--port must be a number, got "$portArg".');
+    }
+
+    // Prerequisites run through the task engine, once before the start and
+    // again before every restart, so generated code is never stale.
+    Future<int> runDependsOn() async {
+      if (target.target.dependsOn.isEmpty) return 0;
+      var code = 0;
+      for (final name in target.target.dependsOn) {
+        final taskName = name.startsWith('^') ? name.substring(1) : name;
+        final TaskGraph graph;
+        try {
+          graph = buildTaskGraph(
+            config: resolved,
+            task: taskName,
+            targets: packagesForDependsOn(name, target.package, ws),
+            workspace: ws,
+          );
+        } on CyclicDependencyException catch (e) {
+          throw _RaskError(e.toString());
+        }
+        code = await runTaskGraph(
+          graph,
+          workspace: ws,
+          runner: rask.processRunner,
+          out: rask.out,
+          cache: TaskCache(
+            workspace: ws,
+            directory: Directory(
+              p.join(ws.root.path, '.dart_tool', 'rask', 'cache'),
+            ),
+          ),
+          configKey: rask.configKey,
+          generated: resolveGeneratedPackages(resolved, ws),
+          taskName: taskName,
+        );
+        if (code != 0) return code;
+      }
+      return 0;
+    }
+
+    final roots = watchRoots(target.target.watch);
+    final changes = watchChanges(
+      target.package.path,
+      roots,
+      target.target.watch,
+    );
+    final loop = DevLoop(
+      resolved: target,
+      workspace: ws,
+      launcher: rask.launcher,
+      runner: rask.processRunner,
+      out: rask.out,
+      changes: changes,
+      runDependsOn: runDependsOn,
+      args: argResults!.rest,
+      port: port,
+    );
+    final sigint = ProcessSignal.sigint.watch().listen((_) async {
+      rask.out.writeln('rask: stopping ${target.target.name}');
+      // Awaited here, not fire-and-forget: stop() is what completes the
+      // Future loop.run() below is awaiting, so a failure inside it must
+      // not become an unhandled error that leaves that Future pending.
+      await loop.stop();
+    });
+    try {
+      return await loop.run();
+    } finally {
+      await sigint.cancel();
+    }
+  }
+}
+
+/// The packages one entry of a [Target.dependsOn] list runs in, for [target]
+/// in [workspace] — the same rule a task's own `dependsOn` uses (see
+/// [Target.dependsOn]'s doc comment). A bare name runs only in [target]
+/// itself; a `^`-prefixed name runs only in the packages [target] depends
+/// on, transitively, and never in [target] itself. A target that wants
+/// both writes `['^name', 'name']`.
+List<Package> packagesForDependsOn(
+  String entry,
+  Package target,
+  Workspace workspace,
+) => entry.startsWith('^')
+    ? workspace.dependenciesOf(target.name).toList()
+    : [target];
 
 /// `rask pub <args>`: `dart pub <args>` at the workspace root.
 class _PubCommand extends Command<int> {

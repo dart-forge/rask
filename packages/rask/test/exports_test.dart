@@ -15,7 +15,15 @@ void main() {
     final Type t5 = config.ConfigError;
     final Type t6 = config.Package;
     final Type t7 = config.Workspace;
-    expect([t1, t2, t3, t4, t5, t6, t7], hasLength(7));
+    // What a plugin author imports: a Target, the RaskPlugin they
+    // implement, the Command they return, OnChange, and the TargetContext
+    // their hooks run with.
+    final Type t8 = config.Target;
+    final Type t9 = config.RaskPlugin;
+    final Type t10 = config.OnChange;
+    final Type t11 = config.Command;
+    final Type t12 = config.TargetContext;
+    expect([t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12], hasLength(12));
     expect(config.defineConfig(), isA<config.RaskConfig>());
     expect(config.hasTests, isA<Function>());
     expect(config.runRask, isA<Function>());
@@ -40,6 +48,10 @@ void main() {
     expect(engine.resolveGeneratedPackages, isA<Function>());
     expect(engine.ensureGeneratedPackages, isA<Function>());
     expect(engine.genRoot, '.dart_tool/rask/gen');
+    expect(engine.resolveTargets, isA<Function>());
+    final Type t7 = engine.ProcessLauncher;
+    final Type t8 = engine.ResolvedTarget;
+    expect([t7, t8], hasLength(2));
     // and everything from rask.dart too
     expect(engine.defineConfig(), isA<engine.RaskConfig>());
   });

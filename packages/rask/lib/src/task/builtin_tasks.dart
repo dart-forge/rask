@@ -9,7 +9,15 @@ import 'package:rask/src/workspace/workspace.dart';
 /// 'help' is not one of ours: args' `CommandRunner` pre-registers a hidden
 /// `help` command on construction, so a task named `help` would crash with
 /// `ArgumentError: Duplicate command "help"` instead of a clean ConfigError.
-const Set<String> commandNames = {'pub', 'bump', 'publish', 'help'};
+///
+/// 'dev' is registered the same unconditional way: even a workspace with no
+/// plugins gets a `dev` command (so running it says there is no target,
+/// instead of "command not found"), so a task named `dev` needs the same
+/// protection `help` gets. 'build' is different and deliberately absent from
+/// this set: it is never a registered command, only ever a task — synthesized
+/// from plugin targets, or replaced outright by a user's own — so a task
+/// named `build` is legal and simply overrides the synthesized one.
+const Set<String> commandNames = {'pub', 'bump', 'publish', 'help', 'dev'};
 
 /// Whether [pkg] has at least one `*_test.dart` under `test/`. `dart test`
 /// exits 79 when it finds no tests, which would otherwise fail a run for a

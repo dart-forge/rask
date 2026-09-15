@@ -1,3 +1,4 @@
+import 'package:rask/src/plugin/plugin.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:yaml/yaml.dart';
 
@@ -27,6 +28,18 @@ class Task {
   /// [inputs] and verified on a cache hit.
   final List<String> outputs;
 
+  /// The per-package form of [inputs], for a task whose declarations differ
+  /// by package (the synthesized `build` task, one target's globs per
+  /// package). A task sets one form or the other, never both; when this is
+  /// set, it is used instead of [inputs] for every package the task runs in.
+  final List<String>? Function(Package pkg)? inputsFor;
+
+  /// The per-package form of [outputs], for a task whose declarations differ
+  /// by package. A task sets one form or the other, never both; when this is
+  /// set, it is used instead of [outputs] for every package the task runs
+  /// in.
+  final List<String> Function(Package pkg)? outputsFor;
+
   /// The package rask generates for each package this task applies to, by
   /// name: `generates: (pkg) => '${pkg.name}_gen'`.
   ///
@@ -46,6 +59,8 @@ class Task {
     this.dependsOn = const [],
     this.inputs,
     this.outputs = const [],
+    this.inputsFor,
+    this.outputsFor,
     this.generates,
     this.description,
   });
@@ -106,12 +121,18 @@ class ConfigError implements Exception {
 /// What `rask.dart` evaluates to. Built with [defineConfig].
 class RaskConfig {
   final List<Task> tasks;
-  const RaskConfig({this.tasks = const []});
+
+  /// Plugins that contribute targets for `rask dev` and `rask build`.
+  final List<RaskPlugin> plugins;
+
+  const RaskConfig({this.tasks = const [], this.plugins = const []});
 }
 
 /// The one function `rask.dart` calls: `final config = defineConfig(...)`.
-RaskConfig defineConfig({List<Task> tasks = const []}) =>
-    RaskConfig(tasks: tasks);
+RaskConfig defineConfig({
+  List<Task> tasks = const [],
+  List<RaskPlugin> plugins = const [],
+}) => RaskConfig(tasks: tasks, plugins: plugins);
 
 extension PackageDependsOn on Package {
   /// Whether [packageName] appears in this package's `dependencies` or

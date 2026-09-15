@@ -1,3 +1,5 @@
+import 'package:rask/src/plugin/plugin.dart';
+import 'package:rask/src/plugin/resolve_targets.dart';
 import 'package:rask/src/task/builtin_tasks.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/workspace/topological_order.dart';
@@ -19,10 +21,20 @@ class ResolvedConfig {
 
 /// Merges [config] over [builtins] (default [builtinTasks]) and validates.
 ///
+/// When [targets] is non-empty, a `build` task is synthesized from it (see
+/// [_buildTask]). It is not a builtin the merge below can partially
+/// override, though: `rask.dart` declaring its own `build` replaces it
+/// outright, the same way declaring any other brand-new task would, so the
+/// synthesized one is added only when the user did not name one.
+///
 /// A user task with a builtin's name keeps the builtin's fields except the
 /// ones the user gave (`where` / `run` / `inputs` / `description` when
 /// non-null, `dependsOn` / `outputs` when non-empty).
-ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
+ResolvedConfig resolveConfig(
+  RaskConfig config, {
+  List<Task>? builtins,
+  Map<String, ResolvedTarget> targets = const {},
+}) {
   final tasks = <String, Task>{
     for (final t in builtins ?? builtinTasks) t.name: t,
   };
@@ -65,21 +77,54 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
     }
   }
 
-  for (final task in tasks.values) {
-    if (task.inputs != null && task.inputs!.isEmpty) {
-      throw ConfigError(
-        'Task "${task.name}": inputs must be null (everything) or a non-empty list.',
-      );
-    }
-    for (final glob in task.inputs ?? const []) {
-      final segment = glob.split('/').first;
-      if (segment == '.dart_tool' || segment == 'build' || segment == '.git') {
+  if (targets.isNotEmpty && !tasks.containsKey('build')) {
+    tasks['build'] = _buildTask(targets);
+  }
+
+  // Validated directly, independent of whether a build task was synthesized
+  // above: when the user declares their own `build`, no task ever carries a
+  // target's dependsOn, so checking only tasks.values (below) would let a
+  // target name a task that does not exist and crash later with an
+  // uncaught ArgumentError once the graph is built. The same reasoning
+  // applies to buildInputs/buildOutputs: they never populate a task's
+  // static inputs/outputs (see _buildTask's doc comment), so the checks
+  // below for tasks.values would never see them either.
+  for (final resolved in targets.values) {
+    final label = 'Target "${resolved.target.name}" (${resolved.package.name})';
+    for (final dep in resolved.target.dependsOn) {
+      final depTask = dep.startsWith('^') ? dep.substring(1) : dep;
+      if (depTask.isEmpty || depTask.startsWith('^')) {
         throw ConfigError(
-          'Task "${task.name}": inputs entry "$glob" is under a directory '
-          'rask never reads (.dart_tool/, build/, .git/).',
+          '$label: dependsOn entry "$dep" is malformed. Use "name" or "^name".',
+        );
+      }
+      if (!tasks.containsKey(depTask)) {
+        throw ConfigError(
+          '$label depends on unknown task "$depTask" '
+          '(known: ${tasks.keys.join(', ')}).',
         );
       }
     }
+    _checkNonEmptyGlobList('$label: buildInputs', resolved.target.buildInputs);
+    _checkNoIgnoredDirGlobs(
+      '$label: buildInputs',
+      resolved.target.buildInputs ?? const [],
+      _ignoredInputDirs,
+    );
+    _checkNoIgnoredDirGlobs(
+      '$label: buildOutputs',
+      resolved.target.buildOutputs,
+      _ignoredOutputDirs,
+    );
+  }
+
+  for (final task in tasks.values) {
+    _checkNonEmptyGlobList('Task "${task.name}": inputs', task.inputs);
+    _checkNoIgnoredDirGlobs(
+      'Task "${task.name}": inputs',
+      task.inputs ?? const [],
+      _ignoredInputDirs,
+    );
     for (final dep in task.dependsOn) {
       final target = dep.startsWith('^') ? dep.substring(1) : dep;
       if (target.isEmpty || target.startsWith('^')) {
@@ -97,6 +142,47 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
     }
   }
   return ResolvedConfig(tasks);
+}
+
+/// A null glob list means "everything"; an empty one is always a mistake
+/// (it would narrow the cache key to nothing, so a cache hit would never be
+/// invalidated — a wrong skip, which is worse than a slow run).
+void _checkNonEmptyGlobList(String label, List<String>? globs) {
+  if (globs != null && globs.isEmpty) {
+    throw ConfigError('$label must be null (everything) or a non-empty list.');
+  }
+}
+
+/// Directories the input-side file walk never reads (see
+/// `TaskCache._ignoredDirs`): an inputs entry under one of these would
+/// always look unchanged, since the cache never even visits it.
+const _ignoredInputDirs = {'.dart_tool', 'build', '.git'};
+
+/// Directories the output-verification walk never reads (see
+/// `TaskCache.outputsHash`): it reads through `.dart_tool/` and `build/`
+/// (that is exactly where generated outputs live), so only `.git/` is
+/// truly invisible to it — an outputs entry there would never get
+/// verified.
+const _ignoredOutputDirs = {'.git'};
+
+/// None of [globs] may start with one of [ignoredDirs]: rask's cache
+/// never sees files under them, so depending on such a path (as an
+/// input) would always look unchanged, and declaring it as an output
+/// would never get verified.
+void _checkNoIgnoredDirGlobs(
+  String label,
+  Iterable<String> globs,
+  Set<String> ignoredDirs,
+) {
+  for (final glob in globs) {
+    final segment = glob.split('/').first;
+    if (ignoredDirs.contains(segment)) {
+      final dirs = ignoredDirs.map((d) => '$d/').join(', ');
+      throw ConfigError(
+        '$label entry "$glob" is under a directory rask never reads ($dirs).',
+      );
+    }
+  }
 }
 
 /// One unit of work: [task] in [package].
@@ -195,4 +281,46 @@ TaskGraph buildTaskGraph({
     for (final n in nodes) n: [for (final id in deps[n.id]!) byId[id]!],
   };
   return TaskGraph._(nodes, resolved);
+}
+
+/// The `build` task a workspace has when its plugins provide targets: one
+/// node per package with a target, running that target's build.
+///
+/// It is a task like any other, so `rask build` is cached, can be narrowed
+/// with `-F`, runs in parallel with `-j`, and can depend on `codegen`.
+///
+/// [Task.inputsFor] / [Task.outputsFor] carry each package's own target's
+/// declarations, rather than unioning every target's globs into the static
+/// [Task.inputs] / [Task.outputs] (which stay at their defaults): a server
+/// target's `buildOutputs` and a web target's `buildOutputs` name different
+/// directories, and applying both to every package would subtract the
+/// other target's outputs from a package's own inputs and verify globs on a
+/// cache hit that package never produced — a wrong skip, which is worse
+/// than a slow run.
+///
+/// [dependsOn] stays unioned across every target, deliberately: it is only
+/// an edge in the graph, and the task it names still applies its own
+/// `where`, so a package that has no use for another target's prerequisite
+/// simply contributes no node for it — a union costs a little extra work at
+/// worst, never a wrong result. Doing the same per package would mean the
+/// graph expanding edges per package, a bigger change than this one.
+Task _buildTask(Map<String, ResolvedTarget> targets) {
+  final dependsOn = <String>{};
+  for (final resolved in targets.values) {
+    dependsOn.addAll(resolved.target.dependsOn);
+  }
+  return Task(
+    'build',
+    description: 'Build every package a plugin provides a target for.',
+    where: (pkg) => targets.containsKey(pkg.name),
+    // Task.run takes a TaskContext, but a target's build wants the extra
+    // TargetContext (the --port it was given). Changing Task.run's
+    // parameter type to carry that would touch every existing task, so this
+    // casts instead. RunContext implements TargetContext, so it always
+    // succeeds at runtime.
+    run: (ctx) => targets[ctx.package.name]!.target.build(ctx as TargetContext),
+    dependsOn: dependsOn.toList(),
+    inputsFor: (pkg) => targets[pkg.name]!.target.buildInputs,
+    outputsFor: (pkg) => targets[pkg.name]!.target.buildOutputs,
+  );
 }

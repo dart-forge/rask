@@ -3,12 +3,19 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
 import 'package:rask/src/gen/generated_package.dart';
+import 'package:rask/src/plugin/plugin.dart';
+import 'package:rask/src/plugin/resolve_targets.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/task/task_runner.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:rask/testing.dart';
 import 'package:test/test.dart';
+
+class _StubPlugin implements RaskPlugin {
+  @override
+  Target? targetFor(Package pkg) => null;
+}
 
 void main() {
   late Directory root;
@@ -584,6 +591,105 @@ void main() {
       await run(g, c: c);
       await run(g, c: c);
       expect(runs, 1);
+    });
+  });
+
+  group('build task per-package cache declarations (targets)', () {
+    late List<String> built;
+
+    Map<String, ResolvedTarget> targetsWith({
+      required List<String> serverOutputs,
+      required List<String> webOutputs,
+    }) => {
+      'server': ResolvedTarget(
+        package: ws['server'],
+        plugin: _StubPlugin(),
+        target: Target(
+          'server',
+          command: (ctx) => Command('dart', const ['run']),
+          build: (ctx) async {
+            built.add('server');
+            write('packages/server/out/server/built.txt', 'built');
+          },
+          buildOutputs: serverOutputs,
+        ),
+      ),
+      'web': ResolvedTarget(
+        package: ws['web'],
+        plugin: _StubPlugin(),
+        target: Target(
+          'web',
+          command: (ctx) => Command('dart', const ['run']),
+          build: (ctx) async {
+            built.add('web');
+            write('packages/web/out/web/built.txt', 'built');
+          },
+          buildOutputs: webOutputs,
+        ),
+      ),
+    };
+
+    setUp(() {
+      built = [];
+      write('packages/server/pubspec.yaml', 'name: server\n');
+      write('packages/web/pubspec.yaml', 'name: web\n');
+      ws = Workspace.load(root);
+    });
+
+    TaskGraph buildGraph(Map<String, ResolvedTarget> targets) => buildTaskGraph(
+      config: resolveConfig(defineConfig(), targets: targets),
+      task: 'build',
+      targets: [ws['server'], ws['web']],
+      workspace: ws,
+    );
+
+    test("each package's own build output is verified on a hit, independently "
+        "of the other target's outputs (no union)", () async {
+      final targets = targetsWith(
+        serverOutputs: ['out/server/**'],
+        webOutputs: ['out/web/**'],
+      );
+      final c = cache();
+      final g = buildGraph(targets);
+      await run(g, c: c);
+      expect(built, unorderedEquals(['server', 'web']));
+
+      built.clear();
+      final hit = await run(g, c: c);
+      expect(built, isEmpty); // both cached
+      expect(hit.$3, contains('server — build (cached, skip)'));
+      expect(hit.$3, contains('web — build (cached, skip)'));
+
+      // Deleting only server's own output invalidates only server: web's
+      // hit does not depend on server's globs, unlike the unioned outputs
+      // a merged task would have carried.
+      File(p.join(root.path, 'packages/server/out/server/built.txt'))
+          .deleteSync();
+      built.clear();
+      await run(g, c: c);
+      expect(built, ['server']);
+    });
+
+    test("a file matching another target's output glob still counts toward "
+        "this package's own cache key", () async {
+      final targets = targetsWith(
+        serverOutputs: ['out/server/**'],
+        webOutputs: ['out/web/**'],
+      );
+      // Not a build artifact of server's own target — just a file that
+      // happens to live under the path web's target declares as its
+      // output. A merged/unioned outputs list would exclude it from
+      // server's own key (a wrong skip); server's own outputsFor is only
+      // 'out/server/**', so it must not.
+      write('packages/server/out/web/leftover.txt', 'v1');
+      final c = cache();
+      final g = buildGraph(targets);
+      await run(g, c: c);
+
+      built.clear();
+      write('packages/server/out/web/leftover.txt', 'v2');
+      await run(g, c: c);
+      expect(built, contains('server'));
     });
   });
 
