@@ -8,6 +8,10 @@ import 'package:rask/src/workspace/workspace.dart';
 /// invisible to `dart pub publish`.
 const String genRoot = '.dart_tool/rask/gen';
 
+/// Absolute path of the directory that holds every generated package.
+String genRootDir(String workspaceRootPath) =>
+    p.joinAll([workspaceRootPath, ...genRoot.split('/')]);
+
 /// A package rask owns because a task declares it with `Task.generates`.
 ///
 /// Not a workspace member: it has no tasks of its own and never becomes a
@@ -94,7 +98,7 @@ List<GeneratedPackage> resolveGeneratedPackages(
         name: name,
         producer: pkg,
         taskName: task.name,
-        dir: p.join(workspace.root.path, '.dart_tool', 'rask', 'gen', name),
+        dir: p.join(genRootDir(workspace.root.path), name),
       );
     }
   }
