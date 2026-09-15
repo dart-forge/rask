@@ -399,9 +399,12 @@ class _DevCommand extends Command<int> {
       args: argResults!.rest,
       port: port,
     );
-    final sigint = ProcessSignal.sigint.watch().listen((_) {
+    final sigint = ProcessSignal.sigint.watch().listen((_) async {
       rask.out.writeln('rask: stopping ${target.target.name}');
-      loop.stop();
+      // Awaited here, not fire-and-forget: stop() is what completes the
+      // Future loop.run() below is awaiting, so a failure inside it must
+      // not become an unhandled error that leaves that Future pending.
+      await loop.stop();
     });
     try {
       return await loop.run();

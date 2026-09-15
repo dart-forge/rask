@@ -137,7 +137,14 @@ class DevLoop {
     if (_inFlight != null) await _inFlight;
     final process = _process;
     _process = null;
-    await process?.terminate();
+    try {
+      await process?.terminate();
+    } catch (_) {
+      // ProcessLauncher's terminate() is not supposed to throw, but stop()
+      // ending the loop must not depend on that: the caller (a Ctrl+C
+      // handler, typically) has nothing useful to do with the error, and a
+      // hung completer would leave a second Ctrl+C as the only way out.
+    }
     if (!_finished.isCompleted) _finished.complete(0);
   }
 

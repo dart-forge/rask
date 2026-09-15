@@ -34,6 +34,28 @@ void main() {
     expect(await running.exitCode, isNot(0));
   }, timeout: const Timeout(Duration(minutes: 1)));
 
+  test('terminateProcess falls back to signalling the process directly, and '
+      'completes, when enumerating the tree fails (pgrep/kill missing, say)', () async {
+    final script =
+        File(
+          '${Directory.systemTemp.createTempSync('rask_launcher_fallback_').path}/loop.dart',
+        )..writeAsStringSync('''
+import 'dart:async';
+void main() {
+  Timer.periodic(const Duration(seconds: 1), (_) {});
+}
+''');
+    final process = await Process.start(Platform.resolvedExecutable, [
+      'run',
+      script.path,
+    ], workingDirectory: script.parent.path);
+    await terminateProcess(
+      process,
+      killTree: (pid) async => throw ProcessException('kill', const []),
+    );
+    expect(await process.exitCode, isNot(0));
+  }, timeout: const Timeout(Duration(minutes: 1)));
+
   test('the environment reaches the process', () async {
     final script =
         File(

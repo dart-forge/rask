@@ -56,18 +56,46 @@ class _SystemProcess implements RunningProcess {
   @override
   Future<void> terminate() async {
     if (Platform.isWindows) {
-      _process.kill(ProcessSignal.sigterm);
-      await _process.exitCode.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          _process.kill(ProcessSignal.sigkill);
-          return -1;
-        },
-      );
+      await _terminateDirectly(_process);
       return;
     }
-    await _killTree(_process.pid);
+    await terminateProcess(_process);
   }
+}
+
+/// Terminates [process]: by default, its whole tree ([killTree], deepest
+/// descendant first) — but the process alone, signalled directly, when
+/// [killTree] fails for any reason (enumerating or signalling a descendant
+/// needs `pgrep` and `kill`, missing on a slim container, say). Either way
+/// this never throws: a caller stopping a dev loop cannot be left with a
+/// pending stop because the host has no `pgrep`.
+///
+/// Exposed (rather than kept as a `_SystemProcess` implementation detail)
+/// so a test can force the fallback without needing a host that actually
+/// lacks `pgrep`: pass a [killTree] that throws.
+Future<void> terminateProcess(
+  Process process, {
+  Future<void> Function(int pid) killTree = _killTree,
+}) async {
+  try {
+    await killTree(process.pid);
+  } catch (_) {
+    await _terminateDirectly(process);
+  }
+}
+
+/// Signals [process] itself (not its tree) via Dart's own [Process.kill] —
+/// nothing shelled out, so nothing here can fail for a missing executable.
+/// SIGTERM, then SIGKILL if it has not gone within five seconds.
+Future<void> _terminateDirectly(Process process) async {
+  process.kill(ProcessSignal.sigterm);
+  await process.exitCode.timeout(
+    const Duration(seconds: 5),
+    onTimeout: () {
+      process.kill(ProcessSignal.sigkill);
+      return -1;
+    },
+  );
 }
 
 /// Kills [pid] and its descendants, deepest first so nothing is reparented
@@ -75,7 +103,8 @@ class _SystemProcess implements RunningProcess {
 /// killing only the one rask started would leave a port bound.
 ///
 /// Sends SIGTERM to the whole tree, waits up to five seconds for it to go,
-/// then SIGKILLs whatever is left.
+/// then SIGKILLs whatever is left. Shells out to `pgrep` and `kill`; a
+/// failure here (either missing) is the caller's job to fall back on.
 Future<void> _killTree(int pid) async {
   final descendants = await _descendants(pid);
   for (final child in descendants) {
