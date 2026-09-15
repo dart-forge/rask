@@ -184,7 +184,8 @@ class _TaskCommand extends Command<int> {
           '`$name: any` to $pubspec silences the hint, but then no clone '
           'can resolve dependencies until rask has generated $name, and '
           'neither `dart pub get` nor `rask pub get` can bootstrap that '
-          '— leaving it undeclared is the safer default.',
+          '— leaving it undeclared is the safer default. Run '
+          '`rask ${task.name}` now so $name has something in it to import.',
         );
       }
     }

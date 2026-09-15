@@ -81,6 +81,24 @@ dependencies until rask has generated the package, and neither
 `dart pub get` nor `rask pub get` can bootstrap that — so leave it
 undeclared.
 
+A task that reads another package's generated code has to say so: `generates`
+tells rask who *produces* a package, never who *imports* one, and rask
+deliberately knows nothing about imports. Add `dependsOn: ['^codegen']` to the
+consuming task (and `'codegen'` too when it also reads its own package's
+generated code) so it never runs against a tree the generator is still
+rewriting.
+
+A generated directory folds into the cache key of every task in the package
+that produces it and every task in a package that depends on that producer —
+not every task that happens to import `package:<name>`. A package that
+imports it without declaring the dependency still resolves it (the workspace
+has one `package_config.json`), but rask cannot see that import, so its tasks
+keep whatever key they already had.
+
+The first `rask <task>` after adding `generates` creates the package with an
+empty `lib`, so `dart pub get` succeeds but the imports it declares do not
+resolve until the generating task has actually run once.
+
 ## Packages
 
 | Package | What it is |

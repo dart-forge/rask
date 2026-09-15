@@ -315,6 +315,7 @@ void main() {
             'no clone can resolve dependencies until rask has generated '
             'tmp1_gen',
           ),
+          contains('Run `rask codegen` now'),
         ),
       );
 

@@ -40,15 +40,22 @@ environment:
     write('packages/app/lib/app.dart', '''
 import 'package:app_gen/app_gen.dart';
 
+const answer = 42;
+
 int callGenerated() => generated();
 ''');
     // The generator: writes one library into the directory it is given.
+    // That library imports the consumer package back — undeclared, since
+    // the generated package's stub pubspec has no dependencies — to prove
+    // the workspace's single package_config.json resolves it anyway.
     write('tool/toy_gen.dart', '''
 import 'dart:io';
 
 void main(List<String> args) {
   final out = args[args.indexOf('--out') + 1];
-  File('\$out/app_gen.dart').writeAsStringSync('int generated() => 42;\\n');
+  File('\$out/app_gen.dart').writeAsStringSync(
+    "import 'package:app/app.dart';\\n\\nint generated() => answer;\\n",
+  );
 }
 ''');
   });

@@ -171,6 +171,33 @@ void main() {
     expect(calls.take(2), unorderedEquals(['run@lib', 'run@app']));
   });
 
+  test('a task that both generates and reads generated code (dependsOn '
+      "['^codegen']) runs lib's node before app's", () async {
+    // Unlike the transitive tests above (which use a different task,
+    // analyze, always landing in its own stage), this is the same task
+    // in both roles: app both generates its own package and, via
+    // dependsOn: ['^codegen'], reads what lib's codegen produced. Without
+    // that self-referential dependsOn, lib and app would land in the
+    // same stage and app's key could be taken against lib's generated
+    // tree mid-rewrite.
+    final order = <String>[];
+    final g = graph(
+      [
+        Task(
+          'codegen',
+          generates: (pkg) => '${pkg.name}_gen',
+          dependsOn: ['^codegen'],
+          run: (ctx) async => order.add(ctx.package.name),
+        ),
+      ],
+      'codegen',
+      targets: [ws['app'], ws['lib']],
+    );
+    final (code, _, _) = await run(g);
+    expect(code, 0);
+    expect(order.indexOf('lib'), lessThan(order.indexOf('app')));
+  });
+
   test(
     'a ProcessFailure stops the run and returns the process exit code',
     () async {
