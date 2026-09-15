@@ -155,4 +155,17 @@ void main() {
     await expectLater(ensure(declared()), throwsA(isA<ConfigError>()));
     expect(runner.calls, isEmpty);
   });
+
+  test(
+    'a foreign override collision leaves no generated directory behind',
+    () async {
+      write(
+        'pubspec_overrides.yaml',
+        'dependency_overrides:\n  app_gen:\n    path: ../elsewhere\n',
+      );
+      await expectLater(ensure(declared()), throwsA(isA<ConfigError>()));
+      expect(exists('.dart_tool/rask/gen/app_gen'), isFalse);
+      expect(runner.calls, isEmpty);
+    },
+  );
 }

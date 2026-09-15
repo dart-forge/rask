@@ -41,7 +41,9 @@ class EnsureResult {
 /// process. Called before every task run, so it must stay that way.
 ///
 /// Throws [ConfigError] (from [syncOverrides]) when the workspace's own
-/// overrides collide with a generated name; the process never starts then.
+/// overrides collide with a generated name. That check runs before
+/// anything touches disk, so on that throw nothing is written and no
+/// process starts.
 Future<EnsureResult> ensureGeneratedPackages({
   required Workspace workspace,
   required List<GeneratedPackage> generated,
@@ -51,6 +53,15 @@ Future<EnsureResult> ensureGeneratedPackages({
   final root = workspace.root.path;
   var changed = false;
   final created = <String>[];
+
+  // Compute the overrides result first: this is where a colliding foreign
+  // override throws ConfigError, and it must do so before anything below
+  // writes a single byte.
+  final overrides = File(p.join(root, 'pubspec_overrides.yaml'));
+  final next = syncOverrides(
+    overrides.existsSync() ? overrides.readAsStringSync() : null,
+    generated,
+  );
 
   final sdk = _sdkConstraint(root);
   for (final g in generated) {
@@ -75,11 +86,6 @@ Future<EnsureResult> ensureGeneratedPackages({
     }
   }
 
-  final overrides = File(p.join(root, 'pubspec_overrides.yaml'));
-  final next = syncOverrides(
-    overrides.existsSync() ? overrides.readAsStringSync() : null,
-    generated,
-  );
   if (next != null) {
     if (next.isEmpty) {
       if (overrides.existsSync()) overrides.deleteSync();
