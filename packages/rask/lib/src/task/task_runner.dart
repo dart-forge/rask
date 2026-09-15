@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:rask/src/cache/task_cache.dart';
 import 'package:rask/src/gen/generated_package.dart';
 import 'package:rask/src/run/process_runner.dart';
+import 'package:rask/src/task/run_context.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/task/task_graph.dart';
 import 'package:rask/src/workspace/workspace.dart';
@@ -126,14 +127,15 @@ Future<int> runTaskGraph(
           if (dir.existsSync()) dir.deleteSync(recursive: true);
           dir.createSync(recursive: true);
         }
-        final ctx = _RunContext(
-          node,
-          workspace,
-          args,
-          runner,
-          sink,
+        final ctx = RunContext(
+          package: node.package,
+          workspace: workspace,
+          args: args,
+          runner: runner,
+          sink: sink,
           capture: !stream,
           gen: genLib,
+          label: node.task.name,
         );
         int? code;
         try {
@@ -185,63 +187,4 @@ Future<int> runTaskGraph(
     if (failure != null) return failure!;
   }
   return 0;
-}
-
-/// The [TaskContext] a node runs with. In capture mode process output and
-/// `log` lines go to the node's buffer; otherwise straight to the terminal.
-class _RunContext implements TaskContext {
-  final TaskNode _node;
-  @override
-  final Workspace workspace;
-  @override
-  final List<String> args;
-  final ProcessRunner _runner;
-  final StringSink _sink;
-  final bool capture;
-  @override
-  final String? gen;
-
-  _RunContext(
-    this._node,
-    this.workspace,
-    this.args,
-    this._runner,
-    this._sink, {
-    required this.capture,
-    this.gen,
-  });
-
-  @override
-  Package get package => _node.package;
-
-  @override
-  Future<void> dart(List<String> args) => exec('dart', args);
-
-  @override
-  Future<void> exec(
-    String executable,
-    List<String> args, {
-    String? workingDirectory,
-  }) async {
-    final dir = workingDirectory ?? package.path;
-    final int code;
-    if (capture) {
-      final result = await _runner.runCaptured(
-        executable,
-        args,
-        workingDirectory: dir,
-      );
-      _sink.write(result.output);
-      if (result.output.isNotEmpty && !result.output.endsWith('\n')) {
-        _sink.writeln();
-      }
-      code = result.exitCode;
-    } else {
-      code = await _runner.run(executable, args, workingDirectory: dir);
-    }
-    if (code != 0) throw ProcessFailure([executable, ...args].join(' '), code);
-  }
-
-  @override
-  void log(String message) => _sink.writeln('rask: ${package.name} — $message');
 }

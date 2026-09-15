@@ -1,3 +1,4 @@
+import 'package:rask/src/plugin/plugin.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:yaml/yaml.dart';
 
@@ -106,12 +107,18 @@ class ConfigError implements Exception {
 /// What `rask.dart` evaluates to. Built with [defineConfig].
 class RaskConfig {
   final List<Task> tasks;
-  const RaskConfig({this.tasks = const []});
+
+  /// Plugins that contribute targets for `rask dev` and `rask build`.
+  final List<RaskPlugin> plugins;
+
+  const RaskConfig({this.tasks = const [], this.plugins = const []});
 }
 
 /// The one function `rask.dart` calls: `final config = defineConfig(...)`.
-RaskConfig defineConfig({List<Task> tasks = const []}) =>
-    RaskConfig(tasks: tasks);
+RaskConfig defineConfig({
+  List<Task> tasks = const [],
+  List<RaskPlugin> plugins = const [],
+}) => RaskConfig(tasks: tasks, plugins: plugins);
 
 extension PackageDependsOn on Package {
   /// Whether [packageName] appears in this package's `dependencies` or

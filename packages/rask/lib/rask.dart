@@ -14,6 +14,7 @@
 library;
 
 export 'src/cli/run_rask.dart';
+export 'src/plugin/plugin.dart';
 export 'src/task/builtin_tasks.dart' show hasTests;
 export 'src/task/task.dart';
 export 'src/workspace/workspace.dart';
