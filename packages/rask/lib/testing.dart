@@ -6,7 +6,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:rask/src/plugin/plugin.dart';
 import 'package:rask/src/release/publish.dart';
+import 'package:rask/src/run/process_launcher.dart';
 import 'package:rask/src/run/process_runner.dart';
 
 /// A [ProcessRunner] that records calls instead of spawning anything.
@@ -142,4 +144,56 @@ class NoRegistry implements PackageRegistry {
     required String name,
     required String version,
   }) async => false;
+}
+
+/// A [ProcessLauncher] that starts nothing. A test drives each process's
+/// life by hand: [complete] ends one, [terminated] counts the stops.
+class FakeProcessLauncher implements ProcessLauncher {
+  /// Every start, in order.
+  final starts = <(Command, String)>[];
+
+  final _processes = <_FakeProcess>[];
+
+  /// How many times a process was terminated.
+  int get terminated => _processes.where((p) => p.wasTerminated).length;
+
+  /// The process started by the [index]th call, counting from 0.
+  RunningProcess operator [](int index) => _processes[index];
+
+  /// Ends the process started by the [index]th call with [exitCode].
+  void complete(int index, int exitCode) => _processes[index].end(exitCode);
+
+  @override
+  Future<RunningProcess> start(
+    Command command, {
+    required String workingDirectory,
+  }) async {
+    starts.add((command, workingDirectory));
+    final process = _FakeProcess(_processes.length + 1000);
+    _processes.add(process);
+    return process;
+  }
+}
+
+class _FakeProcess implements RunningProcess {
+  _FakeProcess(this.pid);
+
+  @override
+  final int pid;
+
+  final _exit = Completer<int>();
+  var wasTerminated = false;
+
+  @override
+  Future<int> get exitCode => _exit.future;
+
+  @override
+  Future<void> terminate() async {
+    wasTerminated = true;
+    end(-15);
+  }
+
+  void end(int code) {
+    if (!_exit.isCompleted) _exit.complete(code);
+  }
 }

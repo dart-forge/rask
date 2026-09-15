@@ -40,6 +40,10 @@ void main() {
     expect(engine.resolveGeneratedPackages, isA<Function>());
     expect(engine.ensureGeneratedPackages, isA<Function>());
     expect(engine.genRoot, '.dart_tool/rask/gen');
+    expect(engine.resolveTargets, isA<Function>());
+    final Type t7 = engine.ProcessLauncher;
+    final Type t8 = engine.ResolvedTarget;
+    expect([t7, t8], hasLength(2));
     // and everything from rask.dart too
     expect(engine.defineConfig(), isA<engine.RaskConfig>());
   });
