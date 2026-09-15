@@ -355,9 +355,7 @@ class _DevCommand extends Command<int> {
         final graph = buildTaskGraph(
           config: resolved,
           task: taskName,
-          targets: name.startsWith('^')
-              ? [...ws.dependenciesOf(target.package.name), target.package]
-              : [target.package],
+          targets: packagesForDependsOn(name, target.package, ws),
           workspace: ws,
         );
         code = await runTaskGraph(
@@ -408,6 +406,20 @@ class _DevCommand extends Command<int> {
     }
   }
 }
+
+/// The packages one entry of a [Target.dependsOn] list runs in, for [target]
+/// in [workspace] — the same rule a task's own `dependsOn` uses (see
+/// [Target.dependsOn]'s doc comment). A bare name runs only in [target]
+/// itself; a `^`-prefixed name runs only in the packages [target] depends
+/// on, transitively, and never in [target] itself. A target that wants
+/// both writes `['^name', 'name']`.
+List<Package> packagesForDependsOn(
+  String entry,
+  Package target,
+  Workspace workspace,
+) => entry.startsWith('^')
+    ? workspace.dependenciesOf(target.name).toList()
+    : [target];
 
 /// Package-relative posix paths of changes under [roots] that [globs] match.
 Stream<String> _watchChanges(

@@ -18,7 +18,7 @@ void main() {
   setUp(() {
     root = Directory.systemTemp.createTempSync('rask_dev_cli_');
     put('.', 'name: _\nworkspace:\n  - packages/*\n');
-    put('packages/app', 'name: app\n');
+    put('packages/app', 'name: app\ndependencies:\n  lib: any\n');
     put('packages/edge', 'name: edge\n');
     put('packages/lib', 'name: lib\n');
     out = StringBuffer();
@@ -84,6 +84,31 @@ void main() {
     );
     expect(out.toString(), contains('--port'));
   });
+
+  test('^codegen in dependsOn runs codegen in dependencies, not in the '
+      'target\'s own package, and a failure there returns promptly', () async {
+    // app depends on lib (set up above); app's target declares
+    // `dependsOn: ['^codegen']`, so codegen must run in lib and not in
+    // app itself. codegen fails outright, so this never reaches a
+    // process start: DevLoop.run bails out on runDependsOn's exit code
+    // before touching the launcher.
+    final ranIn = <String>[];
+    final config = defineConfig(
+      plugins: [_WithCodegen()],
+      tasks: [
+        Task(
+          'codegen',
+          run: (ctx) async {
+            ranIn.add(ctx.package.name);
+            throw ProcessFailure('codegen', 7);
+          },
+        ),
+      ],
+    );
+    expect(await dev(const [], config: config), 7);
+    expect(ranIn, ['lib']);
+    expect(launcher.starts, isEmpty);
+  });
 }
 
 class _Two implements RaskPlugin {
@@ -93,6 +118,18 @@ class _Two implements RaskPlugin {
           pkg.name,
           command: (ctx) => Command('dart', const ['run']),
           build: (ctx) async {},
+        )
+      : null;
+}
+
+class _WithCodegen implements RaskPlugin {
+  @override
+  Target? targetFor(Package pkg) => pkg.name == 'app'
+      ? Target(
+          pkg.name,
+          command: (ctx) => Command('dart', const ['run']),
+          build: (ctx) async {},
+          dependsOn: const ['^codegen'],
         )
       : null;
 }
