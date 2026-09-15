@@ -325,6 +325,7 @@ void main() {
         key,
         package: ws['tmp1'],
         task: 'codegen',
+        outputs: const [],
         outputDirs: [genDir('tmp1_gen')],
       );
       expect(
@@ -360,6 +361,7 @@ void main() {
         key,
         package: ws['tmp1'],
         task: 'codegen',
+        outputs: const [],
         outputDirs: [genDir('tmp1_gen')],
       );
       Directory(genDir('tmp1_gen')).deleteSync(recursive: true);

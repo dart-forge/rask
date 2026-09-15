@@ -174,7 +174,7 @@ class TaskCache {
     String key, {
     required Package package,
     required String task,
-    List<String> outputs = const [],
+    required List<String> outputs,
     List<String> outputDirs = const [],
   }) {
     directory.createSync(recursive: true);
