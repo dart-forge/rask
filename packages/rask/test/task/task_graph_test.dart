@@ -468,8 +468,40 @@ void main() {
         ),
       );
       expect(resolved['build'].dependsOn, ['codegen']);
-      expect(resolved['build'].inputs, ['lib/**']);
-      expect(resolved['build'].outputs, ['build/**']);
+      // Per-package form, not the static one: see the next test for why.
+      expect(resolved['build'].inputsFor!(pkg('app')), ['lib/**']);
+      expect(resolved['build'].outputsFor!(pkg('app')), ['build/**']);
+      expect(resolved['build'].inputs, isNull);
+      expect(resolved['build'].outputs, isEmpty);
+    });
+
+    test("each package's target contributes only its own inputsFor/outputsFor "
+        '— never unioned with another target\'s', () {
+      final resolved = resolveConfig(
+        defineConfig(),
+        targets: {
+          ...targetsFor('server', outputs: ['out/server/**']),
+          ...targetsFor('web', outputs: ['out/web/**']),
+        },
+      );
+      final build = resolved['build'];
+      expect(build.outputsFor!(pkg('server')), ['out/server/**']);
+      expect(build.outputsFor!(pkg('web')), ['out/web/**']);
+      // Neither package's globs leak into the other's.
+      expect(build.outputsFor!(pkg('server')), isNot(contains('out/web/**')));
+      expect(build.outputsFor!(pkg('web')), isNot(contains('out/server/**')));
+    });
+
+    test("dependsOn stays unioned across targets: a package's build node still "
+        "gets a prerequisite another target declared", () {
+      final resolved = resolveConfig(
+        defineConfig(tasks: [Task('codegen', run: (ctx) async {})]),
+        targets: {
+          ...targetsFor('server', dependsOn: ['codegen']),
+          ...targetsFor('web'),
+        },
+      );
+      expect(resolved['build'].dependsOn, ['codegen']);
     });
 
     test(
@@ -512,5 +544,27 @@ void main() {
       expect(resolved['build'].description, 'mine');
       expect(resolved['build'].where, isNull);
     });
+
+    test(
+      "a target's dependsOn is still validated when the user declares their "
+      'own build task (there is no synthesized build task to carry the check)',
+      () {
+        expect(
+          () => resolveConfig(
+            defineConfig(
+              tasks: [Task('build', run: (ctx) async {}, description: 'mine')],
+            ),
+            targets: targetsFor('app', dependsOn: ['codegen']),
+          ),
+          throwsA(
+            isA<ConfigError>().having(
+              (e) => e.message,
+              'message',
+              contains('codegen'),
+            ),
+          ),
+        );
+      },
+    );
   });
 }

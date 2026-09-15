@@ -81,6 +81,30 @@ ResolvedConfig resolveConfig(
     tasks['build'] = _buildTask(targets);
   }
 
+  // Validated directly, independent of whether a build task was synthesized
+  // above: when the user declares their own `build`, no task ever carries a
+  // target's dependsOn, so checking only tasks.values (below) would let a
+  // target name a task that does not exist and crash later with an
+  // uncaught ArgumentError once the graph is built.
+  for (final resolved in targets.values) {
+    for (final dep in resolved.target.dependsOn) {
+      final depTask = dep.startsWith('^') ? dep.substring(1) : dep;
+      if (depTask.isEmpty || depTask.startsWith('^')) {
+        throw ConfigError(
+          'Target "${resolved.target.name}" (${resolved.package.name}): '
+          'dependsOn entry "$dep" is malformed. Use "name" or "^name".',
+        );
+      }
+      if (!tasks.containsKey(depTask)) {
+        throw ConfigError(
+          'Target "${resolved.target.name}" (${resolved.package.name}) '
+          'depends on unknown task "$depTask" '
+          '(known: ${tasks.keys.join(', ')}).',
+        );
+      }
+    }
+  }
+
   for (final task in tasks.values) {
     if (task.inputs != null && task.inputs!.isEmpty) {
       throw ConfigError(
@@ -218,20 +242,26 @@ TaskGraph buildTaskGraph({
 ///
 /// It is a task like any other, so `rask build` is cached, can be narrowed
 /// with `-F`, runs in parallel with `-j`, and can depend on `codegen`.
+///
+/// [Task.inputsFor] / [Task.outputsFor] carry each package's own target's
+/// declarations, rather than unioning every target's globs into the static
+/// [Task.inputs] / [Task.outputs] (which stay at their defaults): a server
+/// target's `buildOutputs` and a web target's `buildOutputs` name different
+/// directories, and applying both to every package would subtract the
+/// other target's outputs from a package's own inputs and verify globs on a
+/// cache hit that package never produced — a wrong skip, which is worse
+/// than a slow run.
+///
+/// [dependsOn] stays unioned across every target, deliberately: it is only
+/// an edge in the graph, and the task it names still applies its own
+/// `where`, so a package that has no use for another target's prerequisite
+/// simply contributes no node for it — a union costs a little extra work at
+/// worst, never a wrong result. Doing the same per package would mean the
+/// graph expanding edges per package, a bigger change than this one.
 Task _buildTask(Map<String, ResolvedTarget> targets) {
   final dependsOn = <String>{};
-  final outputs = <String>{};
-  List<String>? inputs;
-  var sawNullInputs = false;
   for (final resolved in targets.values) {
     dependsOn.addAll(resolved.target.dependsOn);
-    outputs.addAll(resolved.target.buildOutputs);
-    final declared = resolved.target.buildInputs;
-    if (declared == null) {
-      sawNullInputs = true;
-    } else {
-      (inputs ??= []).addAll(declared);
-    }
   }
   return Task(
     'build',
@@ -244,9 +274,7 @@ Task _buildTask(Map<String, ResolvedTarget> targets) {
     // succeeds at runtime.
     run: (ctx) => targets[ctx.package.name]!.target.build(ctx as TargetContext),
     dependsOn: dependsOn.toList(),
-    // A target that declares no inputs means "everything in the package",
-    // and that swallows any narrower declaration from another target.
-    inputs: sawNullInputs ? null : inputs,
-    outputs: outputs.toList(),
+    inputsFor: (pkg) => targets[pkg.name]!.target.buildInputs,
+    outputsFor: (pkg) => targets[pkg.name]!.target.buildOutputs,
   );
 }

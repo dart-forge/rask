@@ -77,6 +77,15 @@ Future<int> runTaskGraph(
     return dirs;
   }
 
+  // A task's cache declarations are per-package when it sets inputsFor /
+  // outputsFor (the synthesized `build` task, one target's globs per
+  // package): every place inputs/outputs reach the cache prefers that form,
+  // falling back to the static inputs/outputs otherwise.
+  List<String>? inputsOf(TaskNode node) =>
+      node.task.inputsFor?.call(node.package) ?? node.task.inputs;
+  List<String> outputsOf(TaskNode node) =>
+      node.task.outputsFor?.call(node.package) ?? node.task.outputs;
+
   final keys = <TaskNode, String>{};
   int? failure;
 
@@ -87,8 +96,8 @@ Future<int> runTaskGraph(
         package: node.package,
         task: node.task.name,
         args: args,
-        inputs: node.task.inputs,
-        outputs: node.task.outputs,
+        inputs: inputsOf(node),
+        outputs: outputsOf(node),
         dependsOnKeys: [for (final d in graph.dependenciesOf(node)) keys[d]!],
         configKey: configKey,
         inputDirs: inputDirsOf(node),
@@ -98,7 +107,7 @@ Future<int> runTaskGraph(
           cache!.isFresh(
             key,
             package: node.package,
-            outputs: node.task.outputs,
+            outputs: outputsOf(node),
             outputDirs: outputDirsOf(node),
           )) {
         out.writeln(
@@ -173,7 +182,7 @@ Future<int> runTaskGraph(
             keys[node]!,
             package: node.package,
             task: node.task.name,
-            outputs: node.task.outputs,
+            outputs: outputsOf(node),
             outputDirs: outputDirsOf(node),
           );
         }
