@@ -1,0 +1,65 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: ${{ runner.os }}-dart-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-dart-
+
+      - name: Install rask from this checkout
+        # Deliberately not `dart install rask_cli`: that would test the version
+        # already on pub.dev instead of the code under review. Activating from
+        # the checkout also exercises the launcher, which compiles rask.dart.
+        run: |
+          dart pub global activate -s path packages/rask_cli
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve dependencies
+        # Activating happens to resolve the workspace as a side effect, but
+        # relying on that would leave a confusing failure the day pub changes
+        # it. This is also rask's own passthrough to `dart pub get`, so the run
+        # covers one more path.
+        run: rask pub get
+
+      - name: Analyze
+        run: rask analyze -j 4
+
+      - name: Test
+        run: rask test -j 2
+
+      - name: Check formatting
+        run: rask format
+
+      - name: Integration tests
+        # These start real processes, compile with `dart compile exe`, and run a
+        # real `dart pub get` in a temporary workspace. They are tagged so a
+        # normal `dart test` skips them, which means only this step covers the
+        # parts of rask that touch the outside world.
+        run: |
+          cd packages/rask && dart test -t integration --run-skipped
+          cd ../rask_cli && dart test -t integration --run-skipped
