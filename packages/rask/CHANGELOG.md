@@ -1,5 +1,11 @@
 ## Unreleased
 
+- `defineConfig(plugins: [...])` takes plugins that provide targets.
+  `rask build` runs each target's build as a cached task; `rask dev` starts
+  one target's process and reacts to changes the way the target asked
+  (`OnChange.restart`, `.rebuild`, `.rebuildAndRestart`, `.nothing`), running
+  its prerequisite tasks each time. rask owns the watching, debouncing,
+  restarting and stopping, including the process tree.
 - `Task(generates:)` declares a package rask generates for each package the
   task applies to. rask owns `.dart_tool/rask/gen/<name>/` and the managed
   entries of the root `pubspec_overrides.yaml`, keeps `.gitignore` in step,

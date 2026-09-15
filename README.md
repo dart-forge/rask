@@ -99,6 +99,36 @@ The first `rask <task>` after adding `generates` creates the package with an
 empty `lib`, so `dart pub get` succeeds but the imports it declares do not
 resolve until the generating task has actually run once.
 
+## dev and build
+
+A plugin provides targets: the things `rask dev` starts and `rask build`
+produces. rask owns the loop, so every framework behaves the same.
+
+```dart
+import 'package:rask/rask.dart';
+import 'package:rask_something/rask_something.dart';
+
+final config = defineConfig(plugins: [something()]);
+```
+
+`rask build` is a task like any other: cached, `-F`-able, parallel with
+`-j`, and able to depend on `codegen`. It runs in every package a plugin
+claims.
+
+`rask dev` starts one package. With several to choose from it lists them and
+asks for `-F`. From then on rask watches the target's files, debounces, runs
+the target's prerequisite tasks, and then does what the target asked for on a
+change: restart the process, rebuild its artifacts, both, or nothing when the
+runtime watches its own sources. A failure keeps the previous process and the
+previous artifacts and waits for the next change. The process exiting on its
+own does not end `rask dev` either, because the usual cause is a compile
+error you are about to fix. Ctrl+C stops the process and everything it
+started.
+
+To write a plugin, implement `RaskPlugin.targetFor` and return a `Target`:
+what to run (`command`), what to ship (`build`), what to do first
+(`prepare`), what to watch, and what a change means (`onChange`).
+
 ## Packages
 
 | Package | What it is |
@@ -129,12 +159,12 @@ right order, only when needed. rask does only that part, and it does it the way 
 content-hashed inputs, staged parallelism, filters — without inheriting any of the JS-specific problems.
 
 rask has no framework-specific knowledge. It works the same for a server framework, a Flutter app and a
-collection of plain packages; anything framework-specific belongs in a `rask.dart` or, later, in a plugin.
+collection of plain packages; anything framework-specific belongs in a `rask.dart` or in a plugin.
 
 ## Status
 
 Early. Working today: `test`, `analyze`, `pub`, `bump`, `publish`, `--filter`, `--jobs`, the content-addressed
-cache with output verification, `rask.dart` with custom tasks, and a `Task.generates` API that keeps generated
-code out of `lib/`. Not yet: `dev`/`build` verbs with framework plugins.
+cache with output verification, `rask.dart` with custom tasks, a `Task.generates` API that keeps generated
+code out of `lib/`, and `dev`/`build` verbs driven by framework plugins.
 
 Requires Dart 3.13 or later.

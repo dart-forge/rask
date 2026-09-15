@@ -20,7 +20,6 @@ import 'package:rask/src/task/task_runner.dart';
 import 'package:rask/src/workspace/filter.dart';
 import 'package:rask/src/workspace/topological_order.dart';
 import 'package:rask/src/workspace/workspace.dart';
-import 'package:watcher/watcher.dart';
 
 /// Exit code for usage errors (wrong arguments, not in a workspace).
 const exitUsage = 64;
@@ -379,7 +378,7 @@ class _DevCommand extends Command<int> {
     }
 
     final roots = watchRoots(target.target.watch);
-    final changes = _watchChanges(
+    final changes = watchChanges(
       target.package.path,
       roots,
       target.target.watch,
@@ -420,36 +419,6 @@ List<Package> packagesForDependsOn(
 ) => entry.startsWith('^')
     ? workspace.dependenciesOf(target.name).toList()
     : [target];
-
-/// Package-relative posix paths of changes under [roots] that [globs] match.
-Stream<String> _watchChanges(
-  String packagePath,
-  List<String> roots,
-  List<String> globs,
-) {
-  final controller = StreamController<String>(sync: true);
-  final subscriptions = <StreamSubscription<WatchEvent>>[];
-  controller.onListen = () {
-    for (final root in roots) {
-      final dir = Directory(p.join(packagePath, root));
-      if (!dir.existsSync()) continue;
-      subscriptions.add(
-        DirectoryWatcher(dir.path).events.listen((event) {
-          final rel = p.posix.joinAll(
-            p.split(p.relative(event.path, from: packagePath)),
-          );
-          if (matchesWatch(rel, globs)) controller.add(rel);
-        }),
-      );
-    }
-  };
-  controller.onCancel = () async {
-    for (final s in subscriptions) {
-      await s.cancel();
-    }
-  };
-  return controller.stream;
-}
 
 /// `rask pub <args>`: `dart pub <args>` at the workspace root.
 class _PubCommand extends Command<int> {

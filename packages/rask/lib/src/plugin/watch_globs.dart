@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:glob/glob.dart';
 import 'package:path/path.dart' as p;
+import 'package:watcher/watcher.dart';
 
 /// Directory names rask never watches. Generated code lives under
 /// `.dart_tool`, and watching it would make the dev loop feed itself:
@@ -42,4 +46,34 @@ List<String> watchRoots(List<String> globs) {
 bool matchesWatch(String path, List<String> globs) {
   if (path == _never || p.posix.isWithin(_never, path)) return false;
   return globs.any((g) => Glob(g).matches(path));
+}
+
+/// Package-relative posix paths of changes under [roots] that [globs] match.
+Stream<String> watchChanges(
+  String packagePath,
+  List<String> roots,
+  List<String> globs,
+) {
+  final controller = StreamController<String>(sync: true);
+  final subscriptions = <StreamSubscription<WatchEvent>>[];
+  controller.onListen = () {
+    for (final root in roots) {
+      final dir = Directory(p.join(packagePath, root));
+      if (!dir.existsSync()) continue;
+      subscriptions.add(
+        DirectoryWatcher(dir.path).events.listen((event) {
+          final rel = p.posix.joinAll(
+            p.split(p.relative(event.path, from: packagePath)),
+          );
+          if (matchesWatch(rel, globs)) controller.add(rel);
+        }),
+      );
+    }
+  };
+  controller.onCancel = () async {
+    for (final s in subscriptions) {
+      await s.cancel();
+    }
+  };
+  return controller.stream;
 }
