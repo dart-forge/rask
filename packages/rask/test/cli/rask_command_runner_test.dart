@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cli/rask_command_runner.dart';
 import 'package:rask/src/task/task.dart';
+import 'package:rask/src/workspace/workspace.dart';
 import 'package:rask/testing.dart';
 import 'package:test/test.dart';
 
@@ -285,5 +286,73 @@ void main() {
         expect(out.toString(), contains('analyze'));
       },
     );
+  });
+
+  group('generated packages', () {
+    Task codegen({String Function(Package pkg)? generates}) => Task(
+      'codegen',
+      where: (pkg) => pkg.name == 'tmp1',
+      generates: generates ?? ((pkg) => 'tmp1_gen'),
+      run: (ctx) async {},
+    );
+
+    bool exists(String rel) => File(p.join(root.path, rel)).existsSync();
+
+    test('creates them, runs pub get first, and hints once', () async {
+      expect(await rask(['codegen'], config: defineConfig(tasks: [codegen()])), 0);
+      expect(exists('.dart_tool/rask/gen/tmp1_gen/pubspec.yaml'), isTrue);
+      expect(exists('pubspec_overrides.yaml'), isTrue);
+      expect(runner.calls.first.$2, ['pub', 'get']);
+      expect(out.toString(), contains('tmp1_gen: any'));
+
+      // Second run: nothing changed, so no pub get and no hint.
+      runner.calls.clear();
+      out.clear();
+      expect(await rask(['codegen'], config: defineConfig(tasks: [codegen()])), 0);
+      expect(runner.calls.where((c) => c.$2.contains('get')), isEmpty);
+      expect(out.toString(), isNot(contains('tmp1_gen: any')));
+    });
+
+    test('a failing pub get stops the run with its exit code', () async {
+      final failing = RecordingRunner(exitCodes: {p.basename(root.path): 69});
+      final code = await RaskCommandRunner(
+        cwd: root,
+        processRunner: failing,
+        out: out,
+        registry: NoRegistry(),
+        config: defineConfig(
+          tasks: [
+            Task(
+              'codegen',
+              where: (pkg) => pkg.name == 'tmp1',
+              generates: (pkg) => 'tmp1_gen',
+              run: (ctx) async => fail('the task must not run'),
+            ),
+          ],
+        ),
+      ).run(['codegen']);
+      expect(code, 69);
+    });
+
+    test('a bad generated name is a usage error', () async {
+      final code = await rask(
+        ['codegen'],
+        config: defineConfig(tasks: [codegen(generates: (pkg) => 'Bad-Name')]),
+      );
+      expect(code, 64);
+      expect(out.toString(), contains('Bad-Name'));
+    });
+
+    test('a task without generates never touches pubspec_overrides.yaml', () async {
+      expect(
+        await rask(
+          ['plain'],
+          config: defineConfig(tasks: [Task('plain', run: (ctx) async {})]),
+        ),
+        0,
+      );
+      expect(exists('pubspec_overrides.yaml'), isFalse);
+      expect(runner.calls.where((c) => c.$2.contains('get')), isEmpty);
+    });
   });
 }
