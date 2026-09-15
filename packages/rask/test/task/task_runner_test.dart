@@ -266,6 +266,19 @@ void main() {
     },
   );
 
+  test(
+    'jobs == 1 prints the header for a node exactly once (no started line)',
+    () async {
+      final (code, _, out) = await run(
+        graph([], 'analyze', targets: [ws['lone']]),
+      );
+      expect(code, 0);
+      final header = 'rask: lone — analyze';
+      final occurrences = RegExp(RegExp.escape(header)).allMatches(out).length;
+      expect(occurrences, 1);
+    },
+  );
+
   test('jobs must be at least 1', () {
     expect(() => run(graph([], 'analyze'), jobs: 0), throwsArgumentError);
   });
@@ -397,6 +410,31 @@ void main() {
         'lone',
       ]); // extra's success was recorded; lone (failed) reruns
       expect(again.$3, contains('rask: extra — analyze (cached, skip)'));
+    });
+
+    test('with more than one job, a started line names every package '
+        'before any of them finishes', () async {
+      final runner = GatedRunner();
+      final out = StringBuffer();
+      final done = runTaskGraph(
+        analyzeGraph(targets: [ws['lib'], ws['lone'], ws['extra']]),
+        workspace: ws,
+        runner: runner,
+        out: out,
+        jobs: 3,
+      );
+      await pumpEventQueue();
+      // The gates are still closed, so none of these packages have
+      // finished, yet the output already says all three are running.
+      for (final pkg in ['lib', 'lone', 'extra']) {
+        expect(out.toString(), contains('rask: $pkg — analyze (started)'));
+      }
+      for (final pkg in ['lib', 'lone', 'extra']) {
+        runner.gate(pkg).complete(0);
+      }
+      await pumpEventQueue();
+      runner.gate('app').complete(0);
+      expect(await done, 0);
     });
 
     test('an exception from the runner (process cannot start) is reported with its text, exit 70', () async {
