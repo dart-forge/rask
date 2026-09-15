@@ -330,6 +330,25 @@ void main() {
       expect(out.toString(), isNot(contains('tmp1_gen: any')));
     });
 
+    test('hint names the declaring task, not the invoked task', () async {
+      expect(
+        await rask(
+          ['analyze'],
+          config: defineConfig(
+            tasks: [
+              codegen(),
+              Task('analyze', run: (ctx) async {}),
+            ],
+          ),
+        ),
+        0,
+      );
+      expect(exists('.dart_tool/rask/gen/tmp1_gen/pubspec.yaml'), isTrue);
+      // The hint should tell the user to run `rask codegen`, the declaring task,
+      // even though `analyze` was invoked.
+      expect(out.toString(), contains('Run `rask codegen` now'));
+    });
+
     test('a failing pub get stops the run with its exit code', () async {
       final failing = RecordingRunner(exitCodes: {p.basename(root.path): 69});
       final code = await RaskCommandRunner(

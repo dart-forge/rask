@@ -172,7 +172,9 @@ class _TaskCommand extends Command<int> {
       }
       if (ensured.pubGetExitCode != 0) return ensured.pubGetExitCode;
       for (final name in ensured.created) {
-        final producer = generated.firstWhere((g) => g.name == name).producer;
+        final g = generated.firstWhere((g) => g.name == name);
+        final producer = g.producer;
+        final declaringTaskName = g.taskName;
         final pubspec = p.join(
           p.relative(producer.path, from: ws.root.path),
           'pubspec.yaml',
@@ -185,7 +187,7 @@ class _TaskCommand extends Command<int> {
           'can resolve dependencies until rask has generated $name, and '
           'neither `dart pub get` nor `rask pub get` can bootstrap that '
           '— leaving it undeclared is the safer default. Run '
-          '`rask ${task.name}` now so $name has something in it to import.',
+          '`rask $declaringTaskName` now so $name has something in it to import.',
         );
       }
     }
