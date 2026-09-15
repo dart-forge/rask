@@ -19,7 +19,12 @@ List<String> watchRoots(List<String> globs) {
     final parts = p.posix.split(glob);
     final literal = <String>[];
     for (final part in parts) {
-      if (part.contains('*') || part.contains('?') || part.contains('{')) break;
+      if (part.contains('*') ||
+          part.contains('?') ||
+          part.contains('{') ||
+          part.contains('[')) {
+        break;
+      }
       literal.add(part);
     }
     if (literal.isEmpty) continue;

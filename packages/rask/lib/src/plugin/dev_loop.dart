@@ -14,11 +14,14 @@ import 'package:rask/src/workspace/workspace.dart';
 /// same. It runs the target's prerequisites, prepares, starts the process,
 /// and from then on reacts to changes according to the target's [OnChange].
 ///
-/// A failure after the process is up never ends the loop: the previous
+/// Most failures after the process is up never end the loop: the previous
 /// process and the previous artifacts stay, the reason is printed, and the
 /// next change tries again. The process exiting on its own does not end the
 /// loop either — that is usually a compile error the developer is about to
-/// fix.
+/// fix. The one exception is a restart whose new process cannot even be
+/// started (`dart` missing from PATH, ...): the old process is already gone
+/// by then, so there is nothing left to preserve, and the loop ends with 70
+/// instead of idling with nothing running.
 class DevLoop {
   DevLoop({
     required this.resolved,
@@ -56,6 +59,11 @@ class DevLoop {
   var _pending = false;
   var _stopping = false;
   var _ready = false;
+
+  /// The currently running round of [_handle], if any: [stop] awaits this
+  /// before touching [_process], so it never races a restart that is
+  /// already underway.
+  Future<void>? _inFlight;
 
   Target get _target => resolved.target;
 
@@ -100,6 +108,10 @@ class DevLoop {
       );
       return _bail(exitCannotRun);
     }
+    // stop() may have run while _start() was awaiting the launcher: _start
+    // has already refused to keep the process it just started running, so
+    // there is nothing left to do but report the clean stop.
+    if (_stopping) return 0;
     _ready = true;
     return _finished.future;
   }
@@ -112,24 +124,49 @@ class DevLoop {
   }
 
   /// Stops the process and ends the loop.
+  ///
+  /// Final: waits for any round of [_handle] already in flight to finish —
+  /// every await point in that round bails out without starting anything
+  /// once [_stopping] is set — then terminates whatever is left running.
+  /// Nothing started after this returns outlives the loop.
   Future<void> stop() async {
     if (_stopping) return;
     _stopping = true;
     _timer?.cancel();
     await _subscription?.cancel();
+    if (_inFlight != null) await _inFlight;
     final process = _process;
     _process = null;
     await process?.terminate();
     if (!_finished.isCompleted) _finished.complete(0);
   }
 
+  /// Ends the loop outright with [code], without touching [_process]: used
+  /// when a restart's new process could not even be started, so there is
+  /// nothing left running to preserve.
+  Future<void> _endWith(int code) async {
+    if (_stopping) return;
+    _stopping = true;
+    _timer?.cancel();
+    await _subscription?.cancel();
+    if (!_finished.isCompleted) _finished.complete(code);
+  }
+
   /// Starts the target's process and, in the background, watches for it to
   /// exit on its own so the loop notices without anyone awaiting it.
+  ///
+  /// Bails out — terminating what it just started without ever making it
+  /// the loop's current process — if [stop] ran while the process was
+  /// coming up.
   Future<void> _start() async {
     final process = await _launcher.start(
       _command(),
       workingDirectory: resolved.package.path,
     );
+    if (_stopping) {
+      await process.terminate();
+      return;
+    }
     _process = process;
     unawaited(_watchExit(process));
   }
@@ -149,11 +186,24 @@ class DevLoop {
   }
 
   /// Terminates whatever is running, then starts the target again.
+  ///
+  /// A [ProcessException] from the new start is not left running (nothing
+  /// is, the old process is already gone) and is not left to escape either:
+  /// it ends the loop with 70, the same code a start failure at boot uses.
   Future<void> _restart() async {
     final process = _process;
     _process = null;
     await process?.terminate();
-    await _start();
+    if (_stopping) return;
+    try {
+      await _start();
+    } on ProcessException catch (e) {
+      out.writeln(
+        'rask: could not restart ${_target.name} (${e.message}). '
+        'Check that ${_command().executable} is installed and on PATH.',
+      );
+      await _endWith(exitCannotRun);
+    }
   }
 
   void _onChange(String _) {
@@ -165,7 +215,7 @@ class DevLoop {
     // A timer already waiting covers any change that arrives while it does.
     _timer ??= Timer(debounce, () {
       _timer = null;
-      unawaited(_handle());
+      _inFlight = _handle();
     });
   }
 
@@ -188,6 +238,7 @@ class DevLoop {
   /// the loop) exactly as it was: the next change tries again.
   Future<void> _handleOnce() async {
     final code = await _runDependsOn();
+    if (_stopping) return;
     if (code != 0) {
       out.writeln(
         'rask: ${resolved.package.name} — dependencies failed (exit $code)',
@@ -203,6 +254,7 @@ class DevLoop {
         out.writeln('rask: ${resolved.package.name} — prepare failed ($e)');
         return;
       }
+      if (_stopping) return;
     }
     if (onChange == OnChange.restart ||
         onChange == OnChange.rebuildAndRestart) {

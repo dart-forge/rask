@@ -20,6 +20,10 @@ void main() {
     test('an empty glob list watches nothing', () {
       expect(watchRoots(const []), isEmpty);
     });
+
+    test('a character class is a glob character too', () {
+      expect(watchRoots(['lib/[ab]/**']), ['lib']);
+    });
   });
 
   group('matchesWatch', () {
