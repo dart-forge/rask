@@ -14,9 +14,11 @@ class FakeContext implements TaskContext {
   final Workspace workspace;
   @override
   final List<String> args;
+  @override
+  final String? gen;
   final calls = <(String, List<String>)>[];
   final logs = <String>[];
-  FakeContext(this.package, this.workspace, {this.args = const []});
+  FakeContext(this.package, this.workspace, {this.args = const [], this.gen});
 
   @override
   Future<void> dart(List<String> args) async => calls.add(('dart', args));

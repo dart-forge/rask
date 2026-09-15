@@ -90,6 +90,7 @@ Future<int> runTaskGraph(
           runner,
           sink,
           capture: !stream,
+          gen: null, // wired up once a task can declare `generates`
         );
         int? code;
         try {
@@ -153,6 +154,8 @@ class _RunContext implements TaskContext {
   final ProcessRunner _runner;
   final StringSink _sink;
   final bool capture;
+  @override
+  final String? gen;
 
   _RunContext(
     this._node,
@@ -161,6 +164,7 @@ class _RunContext implements TaskContext {
     this._runner,
     this._sink, {
     required this.capture,
+    this.gen,
   });
 
   @override
