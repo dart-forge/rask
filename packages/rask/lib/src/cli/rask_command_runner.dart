@@ -351,12 +351,17 @@ class _DevCommand extends Command<int> {
       var code = 0;
       for (final name in target.target.dependsOn) {
         final taskName = name.startsWith('^') ? name.substring(1) : name;
-        final graph = buildTaskGraph(
-          config: resolved,
-          task: taskName,
-          targets: packagesForDependsOn(name, target.package, ws),
-          workspace: ws,
-        );
+        final TaskGraph graph;
+        try {
+          graph = buildTaskGraph(
+            config: resolved,
+            task: taskName,
+            targets: packagesForDependsOn(name, target.package, ws),
+            workspace: ws,
+          );
+        } on CyclicDependencyException catch (e) {
+          throw _RaskError(e.toString());
+        }
         code = await runTaskGraph(
           graph,
           workspace: ws,

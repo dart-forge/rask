@@ -109,6 +109,23 @@ void main() {
     expect(ranIn, ['lib']);
     expect(launcher.starts, isEmpty);
   });
+
+  test(
+    "a dependsOn cycle reachable only through a target's prerequisites is "
+    'a clean usage error, not an uncaught CyclicDependencyException',
+    () async {
+      final config = defineConfig(
+        plugins: [_WithCycle()],
+        tasks: [
+          Task('a', run: (ctx) async {}, dependsOn: ['b']),
+          Task('b', run: (ctx) async {}, dependsOn: ['a']),
+        ],
+      );
+      expect(await dev(const [], config: config), 64);
+      expect(out.toString(), contains('Cyclic dependency'));
+      expect(launcher.starts, isEmpty);
+    },
+  );
 }
 
 class _Two implements RaskPlugin {
@@ -130,6 +147,18 @@ class _WithCodegen implements RaskPlugin {
           command: (ctx) => Command('dart', const ['run']),
           build: (ctx) async {},
           dependsOn: const ['^codegen'],
+        )
+      : null;
+}
+
+class _WithCycle implements RaskPlugin {
+  @override
+  Target? targetFor(Package pkg) => pkg.name == 'app'
+      ? Target(
+          pkg.name,
+          command: (ctx) => Command('dart', const ['run']),
+          build: (ctx) async {},
+          dependsOn: const ['a'],
         )
       : null;
 }
