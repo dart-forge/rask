@@ -128,6 +128,14 @@ Future<int> runTaskGraph(
         final sink = buffer ?? out;
         if (stream) {
           sink.writeln('rask: ${node.package.name} — ${node.task.name}');
+        } else {
+          // With more than one job, output is captured and only printed
+          // when the node finishes, so a still-running package would
+          // otherwise show nothing at all. Write straight to the real
+          // sink (not the buffer) so a parallel run says what's in flight.
+          out.writeln(
+            'rask: ${node.package.name} — ${node.task.name} (started)',
+          );
         }
         final produced = producedBy(node);
         final genLib = produced.isEmpty ? null : produced.first.libDir;
