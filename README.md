@@ -116,14 +116,24 @@ final config = defineConfig(plugins: [something()]);
 claims.
 
 `rask dev` starts one package. With several to choose from it lists them and
-asks for `-F`. From then on rask watches the target's files, debounces, runs
-the target's prerequisite tasks, and then does what the target asked for on a
-change: restart the process, rebuild its artifacts, both, or nothing when the
-runtime watches its own sources. A failure keeps the previous process and the
-previous artifacts and waits for the next change. The process exiting on its
-own does not end `rask dev` either, because the usual cause is a compile
-error you are about to fix. Ctrl+C stops the process and everything it
-started.
+asks for `-F`. `--port` is passed to the target exactly as given; rask
+neither assigns a port nor checks that one is free, so it is entirely up to
+the target what to do with it. From then on rask watches the target's files,
+debounces, runs the target's prerequisite tasks, and then does what the
+target asked for on a change: restart the process, rebuild its artifacts,
+both, or nothing when the runtime watches its own sources. A failure keeps
+the previous process and the previous artifacts and waits for the next
+change, and the process exiting on its own does not end `rask dev` either,
+because the usual cause is a compile error you are about to fix. The one
+failure that does end `rask dev` is the process itself never starting in the
+first place — `dart` missing from PATH, for instance — since there is
+nothing running yet to fall back to. Ctrl+C stops the process and everything
+it started.
+
+The default `watch` is `lib/**` and `bin/**`. A prerequisite task that writes
+into one of those — a `codegen` task producing `*.g.dart` in `lib/`, say —
+feeds its own output back into the watcher, so narrow `watch` to exclude
+whatever that task writes when you add one.
 
 To write a plugin, implement `RaskPlugin.targetFor` and return a `Target`:
 what to run (`command`), what to ship (`build`), what to do first

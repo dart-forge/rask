@@ -5,7 +5,10 @@
   one target's process and reacts to changes the way the target asked
   (`OnChange.restart`, `.rebuild`, `.rebuildAndRestart`, `.nothing`), running
   its prerequisite tasks each time. rask owns the watching, debouncing,
-  restarting and stopping, including the process tree.
+  restarting and stopping, including the process tree. `--port` is passed
+  to the target untouched — rask neither assigns nor probes it — and a
+  process that never starts in the first place ends `rask dev`, unlike a
+  failure once it is already up.
 - `Task(generates:)` declares a package rask generates for each package the
   task applies to. rask owns `.dart_tool/rask/gen/<name>/` and the managed
   entries of the root `pubspec_overrides.yaml`, keeps `.gitignore` in step,
