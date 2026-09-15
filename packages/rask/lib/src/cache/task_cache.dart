@@ -131,12 +131,18 @@ class TaskCache {
     if (outputs.isEmpty && outputDirs.isEmpty) return '';
     final globs = outputs.map(Glob.new).toList();
     final manifest = StringBuffer();
-    for (final entry in _readTree(
-      package.path,
-      ignore: const {'.git'},
-    ).entries) {
-      if (globs.any((g) => g.matches(entry.key))) {
-        manifest.writeln('file\t${entry.key}\t${entry.value}');
+    // Only walk the package's tree when there is at least one glob to match
+    // against it: an empty `outputs` (the common case for a task that only
+    // `generates`) has nothing to match, so the walk — which reads through
+    // `.dart_tool/` and `build/` — would hash the whole package for nothing.
+    if (globs.isNotEmpty) {
+      for (final entry in _readTree(
+        package.path,
+        ignore: const {'.git'},
+      ).entries) {
+        if (globs.any((g) => g.matches(entry.key))) {
+          manifest.writeln('file\t${entry.key}\t${entry.value}');
+        }
       }
     }
     for (final dir in [...outputDirs]..sort()) {

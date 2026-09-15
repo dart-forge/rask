@@ -37,7 +37,26 @@ String? syncOverrides(String? current, List<GeneratedPackage> generated) {
   }
 
   final doc = loadYaml(current);
-  final section = doc is YamlMap ? doc['dependency_overrides'] : null;
+  if (doc is! YamlMap) {
+    // Non-blank text that does not parse to a map: a file holding nothing
+    // but comments (null), or a single scalar. Whatever it is, it is not
+    // ours to replace — a developer may have parked their own commented-out
+    // overrides there — so keep it verbatim and append the managed section,
+    // rather than treating it as if there were no file.
+    if (desired.isEmpty) return null;
+    final text = StringBuffer(current);
+    if (!current.endsWith('\n')) text.writeln();
+    text.writeln();
+    text.writeln('dependency_overrides:');
+    for (final entry in desired.entries) {
+      text
+        ..writeln('  ${entry.key}:')
+        ..writeln('    path: ${entry.value}');
+    }
+    return text.toString();
+  }
+
+  final section = doc['dependency_overrides'];
 
   // Rebuild the whole section in one shot: foreign entries first, in their
   // original order and with their original node (so anything beyond `path`
@@ -77,9 +96,9 @@ String? syncOverrides(String? current, List<GeneratedPackage> generated) {
   if (newSection.isEmpty) {
     // Nothing rask manages and nothing foreign either: the section, and
     // maybe the whole file, has no reason to exist any more.
-    final otherKeys = doc is YamlMap
-        ? doc.keys.where((k) => k.toString() != 'dependency_overrides')
-        : const Iterable.empty();
+    final otherKeys = doc.keys.where(
+      (k) => k.toString() != 'dependency_overrides',
+    );
     if (otherKeys.isEmpty) return '';
     editor.remove(['dependency_overrides']);
     return editor.toString();

@@ -119,4 +119,39 @@ dependency_overrides:
   test('nothing declared and no file at all is no change', () {
     expect(syncOverrides(null, const []), isNull);
   });
+
+  test('a comments-only file gains the section and keeps its comments', () {
+    const current = '''
+# my local override, commented out for now
+# rask:
+#   path: ../rask/packages/rask
+''';
+    final text = syncOverrides(current, [gen('app_gen')])!;
+    expect(text, startsWith(current));
+    expect(managedOf(text), {'app_gen': '.dart_tool/rask/gen/app_gen'});
+  });
+
+  test('a comments-only file with nothing declared is no change', () {
+    const current = '''
+# my local override, commented out for now
+# rask:
+#   path: ../rask/packages/rask
+''';
+    expect(syncOverrides(current, const []), isNull);
+  });
+
+  test('a file whose content is a scalar is handled like a non-map file', () {
+    const current = 'just a string\n';
+    // Must not throw the PathError a scalar document used to cause; the
+    // text is kept and the generated section appended, same as for a
+    // comments-only file. (The scalar plus a following mapping is not
+    // itself valid YAML to load back — that is the developer's file to fix,
+    // not something rask can repair without destroying their content.)
+    final text = syncOverrides(current, [gen('app_gen')])!;
+    expect(text, startsWith(current));
+    expect(text, contains('app_gen'));
+    expect(text, contains('.dart_tool/rask/gen/app_gen'));
+
+    expect(syncOverrides(current, const []), isNull);
+  });
 }

@@ -40,10 +40,10 @@ class EnsureResult {
 /// Cheap when nothing changed: it compares file contents and starts no
 /// process. Called before every task run, so it must stay that way.
 ///
-/// Throws [ConfigError] (from [syncOverrides]) when the workspace's own
-/// overrides collide with a generated name. That check runs before
-/// anything touches disk, so on that throw nothing is written and no
-/// process starts.
+/// Throws [ConfigError] (from syncing pubspec_overrides.yaml) when the
+/// workspace's own overrides collide with a generated name. That check
+/// runs before anything touches disk, so on that throw nothing is written
+/// and no process starts.
 Future<EnsureResult> ensureGeneratedPackages({
   required Workspace workspace,
   required List<GeneratedPackage> generated,

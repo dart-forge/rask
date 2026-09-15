@@ -242,6 +242,23 @@ void main() {
       );
     });
 
+    test('a task with only outputDirs and no outputs does not walk the '
+        'package\'s .dart_tool', () {
+      final dir = p.join(root.path, '.dart_tool', 'rask', 'gen', 'tmp1_gen');
+      Directory(dir).createSync(recursive: true);
+      File(p.join(dir, 'g.dart')).writeAsStringSync('int g = 1;');
+      final before = cache().outputsHash(
+        ws['tmp1'],
+        const [],
+        outputDirs: [dir],
+      );
+      write('packages/tmp1/.dart_tool/unrelated.txt', 'noise');
+      expect(
+        cache().outputsHash(ws['tmp1'], const [], outputDirs: [dir]),
+        before,
+      );
+    });
+
     test('isFresh goes false once a build/ output is deleted', () {
       write('packages/tmp1/build/out.js', 'console.log(1);');
       const outputs = ['build/**'];
