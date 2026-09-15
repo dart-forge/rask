@@ -261,4 +261,132 @@ void main() {
       );
     });
   });
+
+  group('generated directories', () {
+    String genDir(String name) =>
+        p.join(root.path, '.dart_tool', 'rask', 'gen', name);
+
+    void writeGen(String name, String rel, String content) {
+      final f = File(p.join(genDir(name), rel));
+      f.parent.createSync(recursive: true);
+      f.writeAsStringSync(content);
+    }
+
+    test('inputDirs change the key when the generated code changes', () {
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
+      String key() => cache().keyForTask(
+        package: ws['tmp1'],
+        task: 'test',
+        args: const [],
+        inputDirs: [genDir('tmp1_gen')],
+      );
+      final before = key();
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 2;');
+      expect(key(), isNot(before));
+    });
+
+    test('inputDirs are part of the key, so the same task without them differs', () {
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
+      final withDir = cache().keyForTask(
+        package: ws['tmp1'],
+        task: 'test',
+        args: const [],
+        inputDirs: [genDir('tmp1_gen')],
+      );
+      final without = cache().keyForTask(
+        package: ws['tmp1'],
+        task: 'test',
+        args: const [],
+      );
+      expect(withDir, isNot(without));
+    });
+
+    test('a generating task is not invalidated by its own output', () {
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
+      String key() => cache().keyForTask(
+        package: ws['tmp1'],
+        task: 'codegen',
+        args: const [],
+      );
+      final before = key();
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 2;');
+      expect(key(), before);
+    });
+
+    test('outputDirs make a hit stale when the generated tree changes', () {
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
+      final c = cache();
+      final key = c.keyForTask(
+        package: ws['tmp1'],
+        task: 'codegen',
+        args: const [],
+      );
+      c.storeTask(
+        key,
+        package: ws['tmp1'],
+        task: 'codegen',
+        outputDirs: [genDir('tmp1_gen')],
+      );
+      expect(
+        c.isFresh(
+          key,
+          package: ws['tmp1'],
+          outputs: const [],
+          outputDirs: [genDir('tmp1_gen')],
+        ),
+        isTrue,
+      );
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 2;');
+      expect(
+        c.isFresh(
+          key,
+          package: ws['tmp1'],
+          outputs: const [],
+          outputDirs: [genDir('tmp1_gen')],
+        ),
+        isFalse,
+      );
+    });
+
+    test('outputDirs make a hit stale when the generated package is gone', () {
+      writeGen('tmp1_gen', 'lib/g.dart', 'int g = 1;');
+      final c = cache();
+      final key = c.keyForTask(
+        package: ws['tmp1'],
+        task: 'codegen',
+        args: const [],
+      );
+      c.storeTask(
+        key,
+        package: ws['tmp1'],
+        task: 'codegen',
+        outputDirs: [genDir('tmp1_gen')],
+      );
+      Directory(genDir('tmp1_gen')).deleteSync(recursive: true);
+      expect(
+        c.isFresh(
+          key,
+          package: ws['tmp1'],
+          outputs: const [],
+          outputDirs: [genDir('tmp1_gen')],
+        ),
+        isFalse,
+      );
+    });
+
+    test('order of inputDirs does not matter', () {
+      writeGen('a_gen', 'lib/a.dart', 'int a = 1;');
+      writeGen('b_gen', 'lib/b.dart', 'int b = 1;');
+      String key(List<String> dirs) => cache().keyForTask(
+        package: ws['tmp1'],
+        task: 'test',
+        args: const [],
+        inputDirs: dirs,
+      );
+      expect(
+        key([genDir('a_gen'), genDir('b_gen')]),
+        key([genDir('b_gen'), genDir('a_gen')]),
+      );
+    });
+  });
 }

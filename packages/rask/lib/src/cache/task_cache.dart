@@ -51,6 +51,11 @@ class TaskCache {
   /// [outputs] are excluded from them. Dependency members always contribute
   /// all their files. [dependsOnKeys] are the keys of the nodes this one
   /// depends on; [configKey] identifies the `rask.dart` in effect.
+  ///
+  /// [inputDirs] are absolute directories outside the package whose whole
+  /// tree belongs to the key — the packages rask generates for this package
+  /// and for its dependencies. They are read through `.dart_tool`, which the
+  /// package trees skip, and never memoized: a task run rewrites them.
   String keyForTask({
     required Package package,
     required String task,
@@ -59,6 +64,7 @@ class TaskCache {
     List<String> outputs = const [],
     List<String> dependsOnKeys = const [],
     String configKey = '',
+    List<String> inputDirs = const [],
   }) {
     final root = workspace.root.path;
     final manifest = StringBuffer()
@@ -97,21 +103,32 @@ class TaskCache {
       _writeTree(manifest, _tree(dep.path));
     }
 
+    for (final dir in [...inputDirs]..sort()) {
+      manifest.writeln('genDir\t${p.relative(dir, from: root)}');
+      _writeTree(manifest, _readTree(dir, ignore: const {'.git'}));
+    }
+
     for (final k in [...dependsOnKeys]..sort()) {
       manifest.writeln('dependsOn\t$k');
     }
     return _sha(manifest.toString());
   }
 
-  /// Hash of the files in [package] matching [outputs]; `''` when [outputs]
-  /// is empty. Not memoized: outputs change when tasks run.
+  /// Hash of the files in [package] matching [outputs] plus the whole tree
+  /// of each of [outputDirs]; `''` when both are empty. Not memoized:
+  /// outputs change when tasks run.
   ///
   /// Unlike [_tree], this reads through `.dart_tool/` and `build/` (only
   /// `.git/` stays ignored): those are exactly where generated outputs live,
   /// and skipping them made a task with `outputs: ['build/**']` verify
-  /// against nothing.
-  String outputsHash(Package package, List<String> outputs) {
-    if (outputs.isEmpty) return '';
+  /// against nothing. [outputDirs] are read the same way, for the packages
+  /// rask generates.
+  String outputsHash(
+    Package package,
+    List<String> outputs, {
+    List<String> outputDirs = const [],
+  }) {
+    if (outputs.isEmpty && outputDirs.isEmpty) return '';
     final globs = outputs.map(Glob.new).toList();
     final manifest = StringBuffer();
     for (final entry in _readTree(
@@ -122,40 +139,50 @@ class TaskCache {
         manifest.writeln('file\t${entry.key}\t${entry.value}');
       }
     }
+    for (final dir in [...outputDirs]..sort()) {
+      manifest.writeln(
+        'genDir\t${p.relative(dir, from: workspace.root.path)}',
+      );
+      _writeTree(manifest, _readTree(dir, ignore: const {'.git'}));
+    }
     return _sha(manifest.toString());
   }
 
-  /// Whether [key] was recorded and the package's [outputs] still hash to
-  /// what they did then.
+  /// Whether [key] was recorded and the package's [outputs] and
+  /// [outputDirs] still hash to what they did then.
   bool isFresh(
     String key, {
     required Package package,
     required List<String> outputs,
+    List<String> outputDirs = const [],
   }) {
     final entry = _entry(key);
     if (!entry.existsSync()) return false;
     final recorded =
         jsonDecode(entry.readAsStringSync()) as Map<String, dynamic>;
-    return recorded['outputsHash'] == outputsHash(package, outputs);
+    return recorded['outputsHash'] ==
+        outputsHash(package, outputs, outputDirs: outputDirs);
   }
 
   /// Forgets the memoized tree of [package]. Call after a task ran in it:
   /// the run may have written files that later keys must see.
   void invalidate(Package package) => _trees.remove(package.path);
 
-  /// Records that [task] succeeded in [package] with the current [outputs].
+  /// Records that [task] succeeded in [package] with the current [outputs]
+  /// and [outputDirs].
   void storeTask(
     String key, {
     required Package package,
     required String task,
-    required List<String> outputs,
+    List<String> outputs = const [],
+    List<String> outputDirs = const [],
   }) {
     directory.createSync(recursive: true);
     _entry(key).writeAsStringSync(
       jsonEncode({
         'package': package.name,
         'task': task,
-        'outputsHash': outputsHash(package, outputs),
+        'outputsHash': outputsHash(package, outputs, outputDirs: outputDirs),
         'storedAt': DateTime.now().toUtc().toIso8601String(),
       }),
     );
@@ -179,6 +206,7 @@ class TaskCache {
   }) {
     final files = <String>[];
     void walk(Directory d) {
+      if (!d.existsSync()) return;
       for (final entity in d.listSync(followLinks: false)) {
         if (entity is Directory) {
           if (!ignore.contains(p.basename(entity.path))) walk(entity);
