@@ -181,12 +181,12 @@ class _TaskCommand extends Command<int> {
         );
         rask.out.writeln(
           'rask: created package $name in $genRoot\n'
-          '      $pubspec imports it without declaring it, so the '
-          'analyzer may hint about an undeclared dependency; adding '
-          '`$name: any` there silences the hint, but then no clone can '
-          'resolve dependencies until rask has generated $name — neither '
-          '`dart pub get` nor `rask pub get` can bootstrap that, so '
-          'leaving it undeclared is the safer default',
+          '      ${producer.name} imports it without declaring it, so the '
+          'analyzer may hint about an undeclared dependency. Adding '
+          '`$name: any` to $pubspec silences the hint, but then no clone '
+          'can resolve dependencies until rask has generated $name, and '
+          'neither `dart pub get` nor `rask pub get` can bootstrap that '
+          '— leaving it undeclared is the safer default.',
         );
       }
     }
