@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:rask/src/cache/task_cache.dart';
 import 'package:rask/src/gen/ensure.dart';
 import 'package:rask/src/gen/generated_package.dart';
+import 'package:rask/src/plugin/resolve_targets.dart';
 import 'package:rask/src/release/bump.dart';
 import 'package:rask/src/release/publish.dart';
 import 'package:rask/src/run/process_runner.dart';
@@ -43,11 +44,23 @@ class RaskCommandRunner {
 
   /// Runs [args] and returns the process exit code.
   Future<int> run(List<String> args) async {
+    var targets = const <String, ResolvedTarget>{};
     final ResolvedConfig resolved;
     try {
-      resolved = resolveConfig(config);
+      // A plugin's targets decide whether there is a `build` task at all,
+      // and that has to be known before the commands are built. Finding the
+      // workspace can fail (rask run outside one), and that failure has to
+      // stay a usage error with the same message as before.
+      if (config.plugins.isNotEmpty) {
+        final ws = _loadWorkspace();
+        targets = resolveTargets(config, ws);
+      }
+      resolved = resolveConfig(config, targets: targets);
     } on ConfigError catch (e) {
       out.writeln('rask: $e');
+      return exitUsage;
+    } on _RaskError catch (e) {
+      out.writeln('rask: ${e.message}');
       return exitUsage;
     }
 

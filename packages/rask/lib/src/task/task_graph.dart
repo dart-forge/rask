@@ -1,3 +1,5 @@
+import 'package:rask/src/plugin/plugin.dart';
+import 'package:rask/src/plugin/resolve_targets.dart';
 import 'package:rask/src/task/builtin_tasks.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/workspace/topological_order.dart';
@@ -19,10 +21,20 @@ class ResolvedConfig {
 
 /// Merges [config] over [builtins] (default [builtinTasks]) and validates.
 ///
+/// When [targets] is non-empty, a `build` task is synthesized from it (see
+/// [_buildTask]). It is not a builtin the merge below can partially
+/// override, though: `rask.dart` declaring its own `build` replaces it
+/// outright, the same way declaring any other brand-new task would, so the
+/// synthesized one is added only when the user did not name one.
+///
 /// A user task with a builtin's name keeps the builtin's fields except the
 /// ones the user gave (`where` / `run` / `inputs` / `description` when
 /// non-null, `dependsOn` / `outputs` when non-empty).
-ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
+ResolvedConfig resolveConfig(
+  RaskConfig config, {
+  List<Task>? builtins,
+  Map<String, ResolvedTarget> targets = const {},
+}) {
   final tasks = <String, Task>{
     for (final t in builtins ?? builtinTasks) t.name: t,
   };
@@ -65,6 +77,12 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
     }
   }
 
+  Task? synthesizedBuild;
+  if (targets.isNotEmpty && !tasks.containsKey('build')) {
+    synthesizedBuild = _buildTask(targets);
+    tasks['build'] = synthesizedBuild;
+  }
+
   for (final task in tasks.values) {
     if (task.inputs != null && task.inputs!.isEmpty) {
       throw ConfigError(
@@ -89,6 +107,13 @@ ResolvedConfig resolveConfig(RaskConfig config, {List<Task>? builtins}) {
         );
       }
       if (!tasks.containsKey(target)) {
+        // The synthesized `build` task's dependsOn comes from plugin
+        // targets, not from rask.dart, and may legitimately name a task
+        // (typically `codegen`) that a plugin expects the workspace to
+        // declare on its own. rask cannot tell that apart from a genuine
+        // mistake at this point, so only this one task skips the check;
+        // buildTaskGraph still fails if the task never turns up.
+        if (identical(task, synthesizedBuild)) continue;
         throw ConfigError(
           'Task "${task.name}" depends on unknown task "$target" '
           '(known: ${tasks.keys.join(', ')}).',
@@ -195,4 +220,42 @@ TaskGraph buildTaskGraph({
     for (final n in nodes) n: [for (final id in deps[n.id]!) byId[id]!],
   };
   return TaskGraph._(nodes, resolved);
+}
+
+/// The `build` task a workspace has when its plugins provide targets: one
+/// node per package with a target, running that target's build.
+///
+/// It is a task like any other, so `rask build` is cached, can be narrowed
+/// with `-F`, runs in parallel with `-j`, and can depend on `codegen`.
+Task _buildTask(Map<String, ResolvedTarget> targets) {
+  final dependsOn = <String>{};
+  final outputs = <String>{};
+  List<String>? inputs;
+  var sawNullInputs = false;
+  for (final resolved in targets.values) {
+    dependsOn.addAll(resolved.target.dependsOn);
+    outputs.addAll(resolved.target.buildOutputs);
+    final declared = resolved.target.buildInputs;
+    if (declared == null) {
+      sawNullInputs = true;
+    } else {
+      (inputs ??= []).addAll(declared);
+    }
+  }
+  return Task(
+    'build',
+    description: 'Build every package a plugin provides a target for.',
+    where: (pkg) => targets.containsKey(pkg.name),
+    // Task.run takes a TaskContext, but a target's build wants the extra
+    // TargetContext (the --port it was given). Changing Task.run's
+    // parameter type to carry that would touch every existing task, so this
+    // casts instead. RunContext implements TargetContext, so it always
+    // succeeds at runtime.
+    run: (ctx) => targets[ctx.package.name]!.target.build(ctx as TargetContext),
+    dependsOn: dependsOn.toList(),
+    // A target that declares no inputs means "everything in the package",
+    // and that swallows any narrower declaration from another target.
+    inputs: sawNullInputs ? null : inputs,
+    outputs: outputs.toList(),
+  );
 }

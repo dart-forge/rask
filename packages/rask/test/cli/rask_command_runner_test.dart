@@ -2,10 +2,25 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:rask/src/cli/rask_command_runner.dart';
+import 'package:rask/src/plugin/plugin.dart';
 import 'package:rask/src/task/task.dart';
 import 'package:rask/src/workspace/workspace.dart';
 import 'package:rask/testing.dart';
 import 'package:test/test.dart';
+
+class _TestPlugin implements RaskPlugin {
+  _TestPlugin(this.built);
+  final List<String> built;
+
+  @override
+  Target? targetFor(Package pkg) => pkg.name == 'tmp1'
+      ? Target(
+          'server',
+          command: (ctx) => Command('dart', const ['run']),
+          build: (ctx) async => built.add(ctx.package.name),
+        )
+      : null;
+}
 
 void main() {
   late Directory root;
@@ -392,5 +407,24 @@ void main() {
         expect(runner.calls.where((c) => c.$2.contains('get')), isEmpty);
       },
     );
+  });
+
+  group('build from a plugin', () {
+    test('build runs the target of each served package', () async {
+      final built = <String>[];
+      final code = await rask([
+        'build',
+      ], config: defineConfig(plugins: [_TestPlugin(built)]));
+      expect(code, 0);
+      expect(built, ['tmp1']);
+    });
+
+    test('there is no build command without a plugin', () async {
+      expect(await rask(['build']), 64);
+      expect(
+        out.toString(),
+        contains('Could not find a command named "build"'),
+      );
+    });
   });
 }
